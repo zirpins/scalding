@@ -21,7 +21,8 @@ object ScaldingBuild extends Build {
     resolvers ++= Seq(
       "snapshots" at "http://oss.sonatype.org/content/repositories/snapshots",
       "releases"  at "http://oss.sonatype.org/content/repositories/releases",
-      "Concurrent Maven Repo" at "http://conjars.org/repo"
+      "Concurrent Maven Repo" at "http://conjars.org/repo",
+      "cloudera-releases" at "https://repository.cloudera.com/artifactory/cloudera-repos"
     ),
 
     parallelExecution in Test := false,
@@ -124,7 +125,7 @@ object ScaldingBuild extends Build {
     libraryDependencies += "com.joestelmach" % "natty" % "0.7"
   )
 
-  lazy val cascadingVersion = "2.1.5"
+  lazy val cascadingVersion = "2.0.1-cdh4.1.0"
 
   lazy val scaldingCore = Project(
     id = "scalding-core",
@@ -133,6 +134,7 @@ object ScaldingBuild extends Build {
   ).settings(
     name := "scalding-core",
     libraryDependencies ++= Seq(
+      "commons-daemon" % "commons-daemon" % "1.0.5",
       "cascading" % "cascading-core" % cascadingVersion,
       "cascading" % "cascading-local" % cascadingVersion,
       "cascading" % "cascading-hadoop" % cascadingVersion,
@@ -142,7 +144,6 @@ object ScaldingBuild extends Build {
       "com.twitter" %% "algebird-core" % "0.1.11",
       "commons-lang" % "commons-lang" % "2.4",
       "io.backchat.jerkson" %% "jerkson" % "0.7.0",
-      "org.apache.hadoop" % "hadoop-core" % "0.20.2",
       "org.slf4j" % "slf4j-log4j12" % "1.6.6"
     )
   ).dependsOn(scaldingArgs, scaldingDate)
