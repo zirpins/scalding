@@ -28,8 +28,10 @@ def make_setter(cnt)
   underscores = (["_"]*cnt).join(",")
   type_names = ('A'..'Y').to_a[0...cnt]
   comma_tn = type_names.join(",")
-  head = %Q|\n#{$indent}implicit def tup#{cnt}Setter[Z <: Tuple#{cnt}[#{underscores}]]: TupleSetter[Z] = new TupleSetter[Z] {
-#{$indent}  override def apply(arg: Z) = {
+  types_with_manifests = type_names.map { |n| "#{n}:Manifest"}.join(",")
+  tup = "Tuple#{cnt}[#{comma_tn}]"
+  head = %Q|\n#{$indent}implicit def tup#{cnt}Setter[#{types_with_manifests}]: TupleSetter[#{tup}] = new TupleSetter[#{tup}] {
+#{$indent}  override def apply(arg: #{tup}) = {
 #{$indent}    val tup = Tuple.size(#{cnt})
 #{$indent}    |
   middle = (1..cnt).map {|c| "tup.set(#{c-1}, arg._#{c})" }.join("\n#{$indent}    ")

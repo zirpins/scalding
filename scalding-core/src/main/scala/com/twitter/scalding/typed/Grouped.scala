@@ -67,7 +67,7 @@ object Grouped {
   val valueField: Fields = new Fields("value")
   val kvFields: Fields = new Fields("key", "value")
 
-  def apply[K,V](pipe: TypedPipe[(K,V)])(implicit ordering: Ordering[K]): Grouped[K,V] =
+  def apply[K,V](pipe: TypedPipe[(K,V)])(implicit kManifest: Manifest[K], vManifest: Manifest[V], ordering: Ordering[K]): Grouped[K,V] =
       IdentityReduce(ordering, pipe, None)
 
   def keySorting[T](ord : Ordering[T]): Fields = sorting("key", ord)
@@ -104,6 +104,7 @@ trait Reversable[+R] {
  * has an Ordering
  */
 trait KeyedPipe[K] {
+  implicit def kManifest: Manifest[K]
   def keyOrdering: Ordering[K]
   def mapped: TypedPipe[(K, Any)]
 }
@@ -114,6 +115,7 @@ trait KeyedPipe[K] {
  * left in the Grouped class
  */
 sealed trait ReduceStep[K, V1] extends KeyedPipe[K] {
+  implicit def v1Manifest: Manifest[V1]
   /**
    * Note, this satisfies KeyedPipe.mapped: TypedPipe[(K, Any)]
    */
@@ -126,9 +128,12 @@ sealed trait ReduceStep[K, V1] extends KeyedPipe[K] {
 case class IdentityReduce[K, V1](
   override val keyOrdering: Ordering[K],
   override val mapped: TypedPipe[(K, V1)],
-  override val reducers: Option[Int])
-    extends ReduceStep[K, V1]
-    with Grouped[K, V1] {
+  override val reducers: Option[Int]
+)(
+  implicit override val kManifest: Manifest[K],
+  override val v1Manifest: Manifest[V1]
+) extends ReduceStep[K, V1] with Grouped[K, V1] {
+  override val vManifest = v1Manifest
 
   override def withSortOrdering[U >: V1](so: Ordering[U]): IdentityValueSortedReduce[K, V1] =
     IdentityValueSortedReduce[K, V1](keyOrdering, mapped, so, reducers)
@@ -139,18 +144,18 @@ case class IdentityReduce[K, V1](
   override def filterKeys(fn: K => Boolean) =
     UnsortedIdentityReduce(keyOrdering, mapped.filterKeys(fn), reducers)
 
-  override def mapGroup[V3](fn: (K, Iterator[V1]) => Iterator[V3]) =
+  override def mapGroup[V3: Manifest](fn: (K, Iterator[V1]) => Iterator[V3]) =
     IteratorMappedReduce(keyOrdering, mapped, fn, reducers)
 
   // It would be nice to return IdentityReduce here, but
   // the type constraints prevent it currently
-  override def mapValues[V2](fn: V1 => V2) =
+  override def mapValues[V2: Manifest](fn: V1 => V2) =
     UnsortedIdentityReduce(keyOrdering, mapped.mapValues(fn), reducers)
 
   // This is not correct in the type-system, but would be nice to encode
   //override def mapValues[V3](fn: V1 => V3) = IdentityReduce(keyOrdering, mapped.mapValues(fn), reducers)
 
-  override def sum[U >: V1](implicit sg: Semigroup[U]) = {
+  override def sum[U >: V1](implicit sg: Semigroup[U], uManifest: Manifest[U]) = {
     // there is no sort, mapValueStream or force to reducers:
     val upipe: TypedPipe[(K, U)] = mapped // use covariance to set the type
     UnsortedIdentityReduce(keyOrdering, upipe.sumByLocalKeys, reducers).sumLeft
@@ -161,7 +166,7 @@ case class IdentityReduce[K, V1](
     case Some(reds) =>
       // This is wierd, but it is sometimes used to force a partition
       val reducedPipe = groupOp { _.reducers(reds) }
-      TypedPipe.from(reducedPipe, Grouped.kvFields)(tuple2Converter[K,V1])
+      TypedPipe.from(reducedPipe, Grouped.kvFields)(implicitly[Manifest[(K, V1)]], tuple2Converter[K,V1])
     }
 
   /** This is just an identity that casts the result to V1 */
@@ -174,9 +179,11 @@ case class IdentityReduce[K, V1](
 case class UnsortedIdentityReduce[K, V1](
   override val keyOrdering: Ordering[K],
   override val mapped: TypedPipe[(K, V1)],
-  override val reducers: Option[Int])
-    extends ReduceStep[K, V1]
-    with UnsortedGrouped[K, V1] {
+  override val reducers: Option[Int]
+)(
+  implicit override val kManifest: Manifest[K],
+  override val vManifest: Manifest[V1]
+) extends ReduceStep[K, V1] with UnsortedGrouped[K, V1] {
 
   override def withReducers(red: Int): UnsortedIdentityReduce[K, V1] =
     copy(reducers = Some(red))
@@ -184,15 +191,15 @@ case class UnsortedIdentityReduce[K, V1](
   override def filterKeys(fn: K => Boolean) =
     UnsortedIdentityReduce(keyOrdering, mapped.filterKeys(fn), reducers)
 
-  override def mapGroup[V3](fn: (K, Iterator[V1]) => Iterator[V3]) =
+  override def mapGroup[V3: Manifest](fn: (K, Iterator[V1]) => Iterator[V3]) =
     IteratorMappedReduce(keyOrdering, mapped, fn, reducers)
 
   // It would be nice to return IdentityReduce here, but
   // the type constraints prevent it currently
-  override def mapValues[V2](fn: V1 => V2) =
+  override def mapValues[V2: Manifest](fn: V1 => V2) =
     UnsortedIdentityReduce(keyOrdering, mapped.mapValues(fn), reducers)
 
-  override def sum[U >: V1](implicit sg: Semigroup[U]) = {
+  override def sum[U >: V1](implicit sg: Semigroup[U], uManifest: Manifest[U]) = {
     // there is no sort, mapValueStream or force to reducers:
     val upipe: TypedPipe[(K, U)] = mapped // use covariance to set the type
     UnsortedIdentityReduce(keyOrdering, upipe.sumByLocalKeys, reducers).sumLeft
@@ -203,7 +210,7 @@ case class UnsortedIdentityReduce[K, V1](
     case Some(reds) =>
       // This is wierd, but it is sometimes used to force a partition
       val reducedPipe = groupOp { _.reducers(reds) }
-      TypedPipe.from(reducedPipe, Grouped.kvFields)(tuple2Converter[K,V1])
+      TypedPipe.from(reducedPipe, Grouped.kvFields)(implicitly[Manifest[(K, V1)]], tuple2Converter[K,V1])
     }
 
   /** This is just an identity that casts the result to V1 */
@@ -218,9 +225,11 @@ case class IdentityValueSortedReduce[K, V1](
   override val mapped: TypedPipe[(K, V1)],
   valueSort: Ordering[_ >: V1],
   override val reducers: Option[Int]
-  ) extends ReduceStep[K, V1]
-  with SortedGrouped[K, V1]
-  with Reversable[IdentityValueSortedReduce[K, V1]] {
+)(
+  implicit override val kManifest: Manifest[K],
+  override val v1Manifest: Manifest[V1]
+) extends ReduceStep[K, V1] with SortedGrouped[K, V1] with Reversable[IdentityValueSortedReduce[K, V1]] {
+  override val vManifest = v1Manifest
 
   override def reverse: IdentityValueSortedReduce[K, V1] =
     IdentityValueSortedReduce[K, V1](keyOrdering, mapped, valueSort.reverse, reducers)
@@ -233,15 +242,15 @@ case class IdentityValueSortedReduce[K, V1](
     // copy fails to get the types right, :/
     IdentityValueSortedReduce[K, V1](keyOrdering, mapped.filterKeys(fn), valueSort, reducers)
 
-  override def mapGroup[V3](fn: (K, Iterator[V1]) => Iterator[V3]) =
+  override def mapGroup[V3: Manifest](fn: (K, Iterator[V1]) => Iterator[V3]) =
     ValueSortedReduce[K, V1, V3](keyOrdering, mapped, valueSort, fn, reducers)
 
   override lazy val toTypedPipe = {
     val reducedPipe = groupOp {
-        _.sortBy(Grouped.valueSorting(valueSort))
-          .reducers(reducers.getOrElse(-1))
-      }
-    TypedPipe.from(reducedPipe, Grouped.kvFields)(tuple2Converter[K,V1])
+      _.sortBy(Grouped.valueSorting(valueSort))
+       .reducers(reducers.getOrElse(-1))
+    }
+    TypedPipe.from(reducedPipe, Grouped.kvFields)(implicitly[Manifest[(K, V1)]], tuple2Converter[K,V1])
   }
 }
 
@@ -250,7 +259,12 @@ case class ValueSortedReduce[K, V1, V2](
   override val mapped: TypedPipe[(K, V1)],
   valueSort: Ordering[_ >: V1],
   reduceFn: (K, Iterator[V1]) => Iterator[V2],
-  override val reducers: Option[Int])
+  override val reducers: Option[Int]
+)(
+  implicit override val kManifest: Manifest[K],
+  override val v1Manifest: Manifest[V1],
+  override val vManifest: Manifest[V2]
+)
     extends ReduceStep[K, V1] with SortedGrouped[K, V2] {
 
   override def withReducers(red: Int) =
@@ -262,7 +276,7 @@ case class ValueSortedReduce[K, V1, V2](
     // copy fails to get the types right, :/
     ValueSortedReduce[K, V1, V2](keyOrdering, mapped.filterKeys(fn), valueSort, reduceFn, reducers)
 
-  override def mapGroup[V3](fn: (K, Iterator[V2]) => Iterator[V3]) = {
+  override def mapGroup[V3: Manifest](fn: (K, Iterator[V2]) => Iterator[V3]) = {
     // don't make a closure
     val localRed = reduceFn
     val newReduce = {(k: K, iter: Iterator[V1]) => fn(k, localRed(k, iter))}
@@ -279,7 +293,7 @@ case class ValueSortedReduce[K, V1, V2](
             new TypedBufferOp(reduceFn, Grouped.valueField), Fields.REPLACE))
           .reducers(reducers.getOrElse(-1))
       }
-    TypedPipe.from(reducedPipe, Grouped.kvFields)(tuple2Converter[K,V2])
+    TypedPipe.from(reducedPipe, Grouped.kvFields)(implicitly[Manifest[(K, V2)]], tuple2Converter[K,V2])
   }
 }
 
@@ -287,8 +301,12 @@ case class IteratorMappedReduce[K, V1, V2](
   override val keyOrdering: Ordering[K],
   override val mapped: TypedPipe[(K, V1)],
   reduceFn: (K, Iterator[V1]) => Iterator[V2],
-  override val reducers: Option[Int])
-  extends ReduceStep[K, V1] with UnsortedGrouped[K, V2] {
+  override val reducers: Option[Int]
+)(
+  implicit override val kManifest: Manifest[K],
+  override val v1Manifest: Manifest[V1],
+  override val vManifest: Manifest[V2]
+) extends ReduceStep[K, V1] with UnsortedGrouped[K, V2] {
 
   override def withReducers(red: Int): IteratorMappedReduce[K, V1, V2] =
     copy(reducers = Some(red))
@@ -296,7 +314,7 @@ case class IteratorMappedReduce[K, V1, V2](
   override def filterKeys(fn: K => Boolean) =
     copy(mapped = mapped.filterKeys(fn))
 
-  override def mapGroup[V3](fn: (K, Iterator[V2]) => Iterator[V3]) = {
+  override def mapGroup[V3: Manifest](fn: (K, Iterator[V2]) => Iterator[V3]) = {
     // don't make a closure
     val localRed = reduceFn
     val newReduce = {(k: K, iter: Iterator[V1]) => fn(k, localRed(k, iter))}
@@ -309,7 +327,7 @@ case class IteratorMappedReduce[K, V1, V2](
             new TypedBufferOp(reduceFn, Grouped.valueField), Fields.REPLACE))
           .reducers(reducers.getOrElse(-1))
       }
-    TypedPipe.from(reducedPipe, Grouped.kvFields)(tuple2Converter[K,V2])
+    TypedPipe.from(reducedPipe, Grouped.kvFields)(implicitly[Manifest[(K, V2)]], tuple2Converter[K,V2])
   }
 
   override def joinFunction = {
@@ -321,4 +339,3 @@ case class IteratorMappedReduce[K, V1, V2](
     }
   }
 }
-

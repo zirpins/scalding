@@ -32,12 +32,12 @@ object TDsl extends Serializable with GeneratedTupleAdders {
   implicit def pipeTExtensions(pipe : Pipe) : PipeTExtensions = new PipeTExtensions(pipe)
 
   implicit def mappableToTypedPipe[T](src: Mappable[T])
-    (implicit flowDef: FlowDef, mode: Mode): TypedPipe[T] =
-    TypedPipe.from(src)(flowDef, mode)
+    (implicit flowDef: FlowDef, mode: Mode, tManifest: Manifest[T]): TypedPipe[T] =
+    TypedPipe.from(src)
 
   implicit def sourceToTypedPipe[T](src: TypedSource[T])
-    (implicit flowDef: FlowDef, mode: Mode): TypedPipe[T] =
-    TypedPipe.from(src)(flowDef, mode)
+    (implicit flowDef: FlowDef, mode: Mode, tManifest: Manifest[T]): TypedPipe[T] =
+    TypedPipe.from(src)
 }
 
 /*
@@ -54,15 +54,17 @@ class PipeTExtensions(pipe : Pipe) extends Serializable {
    *   }
    *  The above sums all the tuples and returns a TypedPipe[Int] which has the total sum.
    */
-  def typed[T,U](fielddef : (Fields, Fields))(fn : TypedPipe[T] => TypedPipe[U])
-    (implicit conv : TupleConverter[T], setter : TupleSetter[U]) : Pipe = {
-    fn(TypedPipe.from(pipe, fielddef._1)(conv)).toPipe(fielddef._2)(setter)
-  }
-  def toTypedPipe[T](fields : Fields)(implicit conv : TupleConverter[T]) : TypedPipe[T] = {
-    TypedPipe.from[T](pipe, fields)(conv)
-  }
-  def packToTypedPipe[T](fields : Fields)(implicit tp : TuplePacker[T]) : TypedPipe[T] = {
-    val conv = tp.newConverter(fields)
-    toTypedPipe(fields)(conv)
+  def typed[T,U](fielddef : (Fields, Fields))(fn : TypedPipe[T] => TypedPipe[U])(
+    implicit tManifest: Manifest[T],
+    uManifest: Manifest[U],
+    conv: TupleConverter[T],
+    setter: TupleSetter[U]
+  ): Pipe = fn(TypedPipe.from(pipe, fielddef._1)(tManifest, conv)).toPipe(fielddef._2)(setter)
+
+  def toTypedPipe[T: Manifest: TupleConverter](fields : Fields): TypedPipe[T] = TypedPipe.from[T](pipe, fields)
+
+  def packToTypedPipe[T](fields : Fields)(implicit tManifest: Manifest[T], tp: TuplePacker[T]): TypedPipe[T] = {
+    implicit val conv = tp.newConverter(fields)
+    toTypedPipe(fields)
   }
 }

@@ -17,15 +17,18 @@ package com.twitter.scalding.typed
 
 import com.twitter.algebird.{CMS,MurmurHash128}
 
-case class Sketched[K,V]
-  (pipe: TypedPipe[(K,V)],
+case class Sketched[K,V](
+  pipe: TypedPipe[(K,V)],
   numReducers: Int,
   delta: Double,
   eps: Double,
-  seed: Int)
-  (implicit serialization: K => Array[Byte],
-   ordering: Ordering[K])
-    extends HasReducers {
+  seed: Int
+)(
+  implicit kManifest: Manifest[K],
+  vManifest: Manifest[V],
+  serialization: K => Array[Byte],
+  ordering: Ordering[K]
+) extends HasReducers {
 
   val reducers = Some(numReducers)
 
@@ -40,15 +43,15 @@ case class Sketched[K,V]
       .sum
       .values
 
-  def cogroup[V2,R](right: TypedPipe[(K,V2)])
+  def cogroup[V2: Manifest,R: Manifest](right: TypedPipe[(K,V2)])
     (joiner: (K, V, Iterable[V2]) => Iterator[R]) : SketchJoined[K,V,V2,R] =
     new SketchJoined(this, right, numReducers)(joiner)
 
-  def join[V2](right: TypedPipe[(K,V2)]) = cogroup(right)(Joiner.hashInner2)
-  def leftJoin[V2](right: TypedPipe[(K,V2)]) = cogroup(right)(Joiner.hashLeft2)
+  def join[V2: Manifest](right: TypedPipe[(K,V2)]) = cogroup(right)(Joiner.hashInner2)
+  def leftJoin[V2: Manifest](right: TypedPipe[(K,V2)]) = cogroup(right)(Joiner.hashLeft2)
 }
 
-case class SketchJoined[K:Ordering,V,V2,R]
+case class SketchJoined[K: Manifest: Ordering,V: Manifest,V2: Manifest,R: Manifest]
   (left: Sketched[K,V],
    right: TypedPipe[(K,V2)],
    numReducers: Int)

@@ -104,6 +104,7 @@ trait CoGroupable[K, +R] extends HasReducers with java.io.Serializable {
 }
 
 trait CoGrouped[K,+R] extends KeyedListLike[K,R,CoGrouped] with CoGroupable[K, R] with WithReducers[CoGrouped[K,R]] {
+
   override def withReducers(reds: Int) = {
     val self = this // the usual self => trick leads to serialization errors
     val joinF = joinFunction // can't access this on self, since it is protected

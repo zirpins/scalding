@@ -228,8 +228,12 @@ trait ReduceOperations[+Self <: ReduceOperations[Self]] extends java.io.Serializ
    *
    * STRONGLY PREFER TO AVOID THIS. Try reduce or plus and an O(1) memory algorithm.
    */
-  def mapList[T,R](fieldDef : (Fields, Fields))(fn : (List[T]) => R)
-    (implicit conv : TupleConverter[T], setter : TupleSetter[R]) : Self = {
+  def mapList[T, R](fieldDef : (Fields, Fields))(fn : (List[T]) => R)(
+    implicit tManifest: Manifest[T],
+    conv: TupleConverter[T],
+    rManifest: Manifest[R],
+    setter: TupleSetter[R]
+  ): Self = {
     val midset = implicitly[TupleSetter[List[T]]]
     val midconv = implicitly[TupleConverter[List[T]]]
 
@@ -372,7 +376,7 @@ trait ReduceOperations[+Self <: ReduceOperations[Self]] extends java.io.Serializ
   /**
    * Convert a subset of fields into a list of Tuples. Need to provide the types of the tuple fields.
    */
-  def toList[T](fieldDef : (Fields, Fields))(implicit conv : TupleConverter[T]) : Self = {
+  def toList[T: Manifest: TupleConverter](fieldDef : (Fields, Fields)): Self = {
     // TODO(POB) this is jank in my opinion. Nulls should be filter by the user if they want
     mapList[T,List[T]](fieldDef) { _.filter { t => t != null } }
   }
@@ -417,25 +421,23 @@ trait ReduceOperations[+Self <: ReduceOperations[Self]] extends java.io.Serializ
    *
    * topClicks will be a List[(Long,Long)]
    */
-  def sortWithTake[T:TupleConverter](f : (Fields, Fields), k : Int)(lt : (T,T) => Boolean) : Self = {
-    val ord = Ordering.fromLessThan(lt);
-    sortedTake(f, k)(implicitly[TupleConverter[T]], ord)
+  def sortWithTake[T: Manifest: TupleConverter](f: (Fields, Fields), k: Int)(lt: (T,T) => Boolean): Self = {
+    implicit val ord = Ordering.fromLessThan(lt)
+    sortedTake(f, k)
   }
 
   /**
    * Reverse of above when the implicit ordering makes sense.
    */
-  def sortedReverseTake[T](f : (Fields, Fields), k : Int)
-    (implicit conv : TupleConverter[T], ord : Ordering[T]) : Self = {
-    sortedTake[T](f, k)(conv, ord.reverse)
+  def sortedReverseTake[T](f: (Fields, Fields), k: Int)
+      (implicit tManifest: Manifest[T], conv: TupleConverter[T], ord: Ordering[T]): Self = {
+    sortedTake[T](f, k)(tManifest, conv, ord.reverse)
   }
 
   /**
    * Same as above but useful when the implicit ordering makes sense.
    */
-  def sortedTake[T](f : (Fields, Fields), k : Int)
-    (implicit conv : TupleConverter[T], ord : Ordering[T]) : Self = {
-
+  def sortedTake[T: Manifest: TupleConverter: Ordering](f : (Fields, Fields), k : Int): Self = {
     assert(f._2.size == 1, "output field size must be 1")
     implicit val mon = new PriorityQueueMonoid[T](k)
     mapPlusMap(f) { (tup : T) => mon.build(tup) } {

@@ -20,6 +20,9 @@ def make_typed_sink(cnt)
   other_cnts = (1..(22-cnt)).to_a
   typeString = TYPES[0..(cnt - 1)].join(",")
   puts "trait TypedSink#{cnt}[#{typeString}] extends TypedSink[Tuple#{cnt}[#{typeString}]] {"
+  TYPES[0..(cnt - 1)].map do |type|
+    puts "#{$indent}implicit def #{type.downcase}Manifest: Manifest[#{type}]"
+  end
   puts "#{$indent}final def setter[Z <: Tuple#{cnt}[#{typeString}]] = TupleSetter.asSubSetter(TupleSetter.of[Tuple#{cnt}[#{typeString}]])"
   puts "}"
 end

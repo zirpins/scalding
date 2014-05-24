@@ -58,7 +58,7 @@ case class WritableSequenceFile[K <: Writable : Manifest, V <: Writable : Manife
   override val valueType = manifest[V].erasure.asInstanceOf[Class[_ <: Writable]]
 
   def setter[U <: (K,V)]: TupleSetter[U] =
-    TupleSetter.asSubSetter[(K,V), U](TupleSetter.tup2Setter[(K, V)])
+    TupleSetter.asSubSetter[(K,V), U](TupleSetter.tup2Setter[K, V])
   override def sinkFields = f
 
   def converter[U >: (K,V)]: TupleConverter[U] =

@@ -35,15 +35,14 @@ trait FoldOperations[+Self <: FoldOperations[Self]] extends ReduceOperations[Sel
                  (implicit setter : TupleSetter[X], conv : TupleConverter[T]) : Self
 
   //If there is an ordering, we need to reverse the list
-  override def mapList[T,R](fieldDef : (Fields, Fields))(fn : (List[T]) => R)
-    (implicit conv : TupleConverter[T], setter : TupleSetter[R]) : Self = {
+  override def mapList[T: Manifest: TupleConverter,R: Manifest: TupleSetter](fieldDef : (Fields, Fields))(fn : (List[T]) => R): Self = {
     if(sorting.isDefined) {
       //the list is built in reverse order so we need to reverse it here
-      super.mapList[T,R](fieldDef) { l => fn(l.reverse) }(conv,setter)
+      super.mapList[T,R](fieldDef) { l => fn(l.reverse) }
     }
     else {
       // Ordering doesn't matter, so skip the reversal
-      super.mapList[T,R](fieldDef)(fn)(conv,setter)
+      super.mapList[T,R](fieldDef)(fn)
     }
   }
 }

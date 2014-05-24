@@ -167,16 +167,16 @@ abstract class Source extends java.io.Serializable {
 trait Mappable[+T] extends Source with TypedSource[T] {
 
   final def mapTo[U](out : Fields)(mf : (T) => U)
-    (implicit flowDef : FlowDef, mode : Mode, setter : TupleSetter[U]): Pipe = {
-    RichPipe(read(flowDef, mode)).mapTo[T,U](sourceFields -> out)(mf)(converter, setter)
+    (implicit uManifest: Manifest[U], flowDef : FlowDef, mode : Mode, setter : TupleSetter[U]): Pipe = {
+    RichPipe(read(flowDef, mode)).mapTo[T,U](sourceFields -> out)(mf)(uManifest, converter, setter)
   }
   /**
   * If you want to filter, you should use this and output a 0 or 1 length Iterable.
   * Filter does not change column names, and we generally expect to change columns here
   */
   final def flatMapTo[U](out : Fields)(mf : (T) => TraversableOnce[U])
-    (implicit flowDef : FlowDef, mode : Mode, setter : TupleSetter[U]): Pipe = {
-    RichPipe(read(flowDef, mode)).flatMapTo[T,U](sourceFields -> out)(mf)(converter, setter)
+    (implicit uManifest: Manifest[U], flowDef : FlowDef, mode : Mode, setter : TupleSetter[U]): Pipe = {
+    RichPipe(read(flowDef, mode)).flatMapTo[T,U](sourceFields -> out)(mf)(uManifest, converter, setter)
   }
 
   /**

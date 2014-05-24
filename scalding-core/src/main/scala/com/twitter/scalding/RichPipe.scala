@@ -289,8 +289,10 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    * insert('a, 1)
    * }}}
    */
-  def insert[A](fs: Fields, value: A)(implicit setter: TupleSetter[A]): Pipe =
-    map[Unit,A](() -> fs) { _:Unit => value }(implicitly[TupleConverter[Unit]], setter)
+  def insert[A: Manifest: TupleSetter](fs: Fields, value: A): Pipe = {
+    implicit val unit = implicitly[TupleConverter[Unit]]
+    map[Unit,A](() -> fs) { _:Unit => value }
+  }
 
 
   /**
@@ -360,7 +362,8 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    */
   def partition[A,R](fs: (Fields, Fields))(fn: (A) => R)(
     builder: GroupBuilder => GroupBuilder)(
-    implicit conv: TupleConverter[A],
+    implicit rManifest: Manifest[R],
+             conv: TupleConverter[A],
              ord: Ordering[R],
              rset: TupleSetter[R]): Pipe = {
     val (fromFields, toFields) = fs
@@ -370,9 +373,9 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
     val tmpFields = new Fields("__temp__")
     tmpFields.setComparator("__temp__", ord)
 
-    map(fromFields -> tmpFields)(fn)(conv, TupleSetter.singleSetter[R])
+    map(fromFields -> tmpFields)(fn)(rManifest, conv, TupleSetter.singleSetter[R])
       .groupBy(tmpFields)(builder)
-      .map[R,R](tmpFields -> toFields){ (r:R) => r }(TupleConverter.singleConverter[R], rset)
+      .map[R,R](tmpFields -> toFields){ (r:R) => r }(rManifest, TupleConverter.singleConverter[R], rset)
       .discard(tmpFields)
   }
 
@@ -406,26 +409,26 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    * Using mapTo is the same as using map followed by a project for
    * selecting just the ouput fields
    */
-  def map[A,T](fs : (Fields,Fields))(fn : A => T)
-                (implicit conv : TupleConverter[A], setter : TupleSetter[T]) : Pipe = {
+  def map[A,T](fs: (Fields,Fields))(fn: A => T)
+        (implicit tManifest: Manifest[T], conv: TupleConverter[A], setter: TupleSetter[T]): Pipe = {
       conv.assertArityMatches(fs._1)
       setter.assertArityMatches(fs._2)
       each(fs)(new MapFunction[A,T](fn, _, conv, setter))
   }
-  def mapTo[A,T](fs : (Fields,Fields))(fn : A => T)
-                (implicit conv : TupleConverter[A], setter : TupleSetter[T]) : Pipe = {
+  def mapTo[A,T](fs: (Fields,Fields))(fn: A => T)
+        (implicit tManifest: Manifest[T], conv: TupleConverter[A], setter: TupleSetter[T]): Pipe = {
       conv.assertArityMatches(fs._1)
       setter.assertArityMatches(fs._2)
       eachTo(fs)(new MapFunction[A,T](fn, _, conv, setter))
   }
-  def flatMap[A,T](fs : (Fields,Fields))(fn : A => TraversableOnce[T])
-                (implicit conv : TupleConverter[A], setter : TupleSetter[T]) : Pipe = {
+  def flatMap[A,T](fs: (Fields,Fields))(fn: A => TraversableOnce[T])
+        (implicit tManifest: Manifest[T], conv: TupleConverter[A], setter: TupleSetter[T]): Pipe = {
       conv.assertArityMatches(fs._1)
       setter.assertArityMatches(fs._2)
       each(fs)(new FlatMapFunction[A,T](fn, _, conv, setter))
   }
-  def flatMapTo[A,T](fs : (Fields,Fields))(fn : A => TraversableOnce[T])
-                (implicit conv : TupleConverter[A], setter : TupleSetter[T]) : Pipe = {
+  def flatMapTo[A,T](fs: (Fields,Fields))(fn: A => TraversableOnce[T])
+        (implicit tManifest: Manifest[T], conv: TupleConverter[A], setter: TupleSetter[T]): Pipe = {
       conv.assertArityMatches(fs._1)
       setter.assertArityMatches(fs._2)
       eachTo(fs)(new FlatMapFunction[A,T](fn, _, conv, setter))
@@ -457,8 +460,8 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    * Common enough to be useful.
    */
   def flatten[T](fs: (Fields, Fields))
-    (implicit conv: TupleConverter[TraversableOnce[T]], setter: TupleSetter[T]): Pipe =
-    flatMap[TraversableOnce[T],T](fs)({ it : TraversableOnce[T] => it })(conv, setter)
+    (implicit tManifest: Manifest[T], conv: TupleConverter[TraversableOnce[T]], setter: TupleSetter[T]): Pipe =
+    flatMap[TraversableOnce[T],T](fs)({ it : TraversableOnce[T] => it })(tManifest, conv, setter)
 
   /**
    * the same as
@@ -470,8 +473,8 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    * Common enough to be useful.
    */
   def flattenTo[T](fs : (Fields, Fields))
-    (implicit conv : TupleConverter[TraversableOnce[T]], setter : TupleSetter[T]): Pipe =
-    flatMapTo[TraversableOnce[T],T](fs)({ it : TraversableOnce[T] => it })(conv, setter)
+    (implicit tManifest: Manifest[T], conv : TupleConverter[TraversableOnce[T]], setter : TupleSetter[T]): Pipe =
+    flatMapTo[TraversableOnce[T],T](fs)({ it : TraversableOnce[T] => it })(tManifest, conv, setter)
 
   /**
    * Force a materialization to disk in the flow.
@@ -615,21 +618,21 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    * can be cast into integers. The output field 'field3 will be of tupel `(Int, Int)`
    *
    */
-  def pack[T](fs : (Fields, Fields))(implicit packer : TuplePacker[T], setter : TupleSetter[T]) : Pipe = {
+  def pack[T: Manifest: TuplePacker: TupleSetter](fs : (Fields, Fields)): Pipe = {
     val (fromFields, toFields) = fs
     assert(toFields.size == 1, "Can only output 1 field in pack")
-    val conv = packer.newConverter(fromFields)
-    pipe.map(fs) { input : T => input } (conv, setter)
+    implicit val conv = implicitly[TuplePacker[T]].newConverter(fromFields)
+    pipe.map(fs) { input : T => input }
   }
 
   /**
    * Same as pack but only the to fields are preserved.
    */
-  def packTo[T](fs : (Fields, Fields))(implicit packer : TuplePacker[T], setter : TupleSetter[T]) : Pipe = {
+  def packTo[T: Manifest: TuplePacker: TupleSetter](fs : (Fields, Fields)): Pipe = {
     val (fromFields, toFields) = fs
     assert(toFields.size == 1, "Can only output 1 field in pack")
-    val conv = packer.newConverter(fromFields)
-    pipe.mapTo(fs) { input : T => input } (conv, setter)
+    implicit val conv = implicitly[TuplePacker[T]].newConverter(fromFields)
+    pipe.mapTo(fs) { input : T => input }
   }
 
   /**
@@ -642,23 +645,25 @@ class RichPipe(val pipe : Pipe) extends java.io.Serializable with JoinAlgorithms
    *
    * will unpack 'field1 into 'field2 and 'field3
    */
-  def unpack[T](fs : (Fields, Fields))(implicit unpacker : TupleUnpacker[T], conv : TupleConverter[T]) : Pipe = {
+  def unpack[T: Manifest: TupleUnpacker: TupleConverter](fs : (Fields, Fields)): Pipe = {
     val (fromFields, toFields) = fs
     assert(fromFields.size == 1, "Can only take 1 input field in unpack")
+    val unpacker = implicitly[TupleUnpacker[T]]
     val fields = (fromFields, unpacker.getResultFields(toFields))
-    val setter = unpacker.newSetter(toFields)
-    pipe.map(fields) { input : T => input } (conv, setter)
+    implicit val setter = unpacker.newSetter(toFields)
+    pipe.map(fields) { input : T => input }
   }
 
   /**
    * Same as unpack but only the to fields are preserved.
    */
-  def unpackTo[T](fs : (Fields, Fields))(implicit unpacker : TupleUnpacker[T], conv : TupleConverter[T]) : Pipe = {
+  def unpackTo[T: Manifest: TupleUnpacker: TupleConverter](fs : (Fields, Fields)): Pipe = {
     val (fromFields, toFields) = fs
     assert(fromFields.size == 1, "Can only take 1 input field in unpack")
+    val unpacker = implicitly[TupleUnpacker[T]]
     val fields = (fromFields, unpacker.getResultFields(toFields))
-    val setter = unpacker.newSetter(toFields)
-    pipe.mapTo(fields) { input : T => input } (conv, setter)
+    implicit val setter = unpacker.newSetter(toFields)
+    pipe.mapTo(fields) { input : T => input }
   }
 }
 

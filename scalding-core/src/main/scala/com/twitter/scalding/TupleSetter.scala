@@ -34,7 +34,7 @@ trait LowPriorityTupleSetters extends java.io.Serializable {
    * we just assume it is a single entry in the tuple
    * For some reason, putting a val TupleSetter[Any] here messes up implicit resolution
    */
-  implicit def singleSetter[A]: TupleSetter[A] = new TupleSetter[A] {
+  implicit def singleSetter[A: Manifest]: TupleSetter[A] = new TupleSetter[A] {
     override def apply(arg : A) = {
       val tup = CTuple.size(1)
       tup.set(0, arg)

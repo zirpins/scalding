@@ -42,12 +42,13 @@ object BytesWritableCodec {
 }
 
 object CodecSource {
-  def apply[T](paths: String*)(implicit codec: Injection[T, Array[Byte]]) = new CodecSource[T](paths)
+  def apply[T](paths: String*)(implicit codec: Injection[T, Array[Byte]],tManifest: Manifest[T]) =
+    new CodecSource[T](paths)
 }
 
-class CodecSource[T] private (val hdfsPaths: Seq[String], val maxFailures: Int = 0)(implicit @transient injection: Injection[T, Array[Byte]])
-extends FileSource
-with Mappable[T] {
+class CodecSource[T] private (val hdfsPaths: Seq[String], val maxFailures: Int = 0)
+  (implicit @transient injection: Injection[T, Array[Byte]], tManifest: Manifest[T])
+  extends FileSource with Mappable[T] {
   import Dsl._
 
   val fieldSym = 'encodedBytes
