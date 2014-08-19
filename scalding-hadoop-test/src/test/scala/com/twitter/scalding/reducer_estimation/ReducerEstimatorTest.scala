@@ -1,7 +1,7 @@
 package com.twitter.scalding.reducer_estimation
 
 import com.twitter.scalding._
-import com.twitter.scalding.platform.{ HadoopPlatformJobTest, LocalCluster }
+import com.twitter.scalding.platform.{ PlatformTests, HadoopPlatformJobTest, LocalCluster }
 import org.apache.hadoop.mapred.JobConf
 import org.specs._
 import scala.collection.JavaConverters._

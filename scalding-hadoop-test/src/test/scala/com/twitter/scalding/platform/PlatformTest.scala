@@ -16,7 +16,7 @@ limitations under the License.
 package com.twitter.scalding.platform
 
 import com.twitter.scalding._
-
+import org.apache.log4j.{ Logger, Level }
 import org.specs._
 
 class InAndOutJob(args: Args) extends Job(args) {
@@ -71,8 +71,9 @@ class TsvNoCacheJob(args: Args) extends Job(args) {
 // This is useful given that the Hadoop MiniMRCluster and MiniDFSCluster spew a ton of logging.
 class PlatformTests extends Specification {
 
-  org.apache.log4j.Logger.getLogger("org.apache.hadoop").setLevel(org.apache.log4j.Level.ERROR)
-  org.apache.log4j.Logger.getLogger("org.mortbay").setLevel(org.apache.log4j.Level.ERROR)
+  Logger.getLogger("org.apache.hadoop").setLevel(Level.ERROR)
+  Logger.getLogger("org.mortbay").setLevel(Level.ERROR)
+  Logger.getLogger("org.apache.hadoop.metrics2").setLevel(Level.ERROR)
 
   noDetailedDiffs() //Fixes an issue with scala 2.9
 
