@@ -13,6 +13,7 @@ object HipJob {
   val countsPath = "counts.tsv"
   val counts = TypedTsv[(String, Int)](countsPath)
   val correct = Map("hello" -> 1, "goodbye" -> 1, "world" -> 2)
+  val explicitNumReducers = 7
 }
 
 class HipJob(args: Args) extends Job(args) {
@@ -54,7 +55,18 @@ class SimpleJob(args: Args) extends Job(args) {
     .write(counts)
 }
 
-class ReducerEstimatorTest extends Specification {
+class SimpleJobWithExplicitReducers(args: Args) extends Job(args) {
+  import HipJob._
+  TypedPipe.from(inSrc)
+    .flatMap(_.split("[^\\w]+"))
+    .map(_.toLowerCase -> 1)
+    .group
+    .sum
+    .withReducers(explicitNumReducers)
+    .write(counts)
+}
+
+class ReducerEstimatorTest extends PlatformTests {
 
   import HipJob._
 
@@ -106,6 +118,31 @@ class ReducerEstimatorTest extends Specification {
 
     doLast { cluster.shutdown() }
 
+  }
+
+  "Job with explicit num reducers" should {
+
+    val cluster = LocalCluster()
+
+    val conf = Config.empty
+      .addReducerEstimator(classOf[InputSizeReducerEstimator]) +
+      (InputSizeReducerEstimator.BytesPerReducer -> (1L << 10).toString)
+
+    doFirst { cluster.initialize(conf) }
+
+    "run with explicit num reducers" in {
+      HadoopPlatformJobTest(new SimpleJobWithExplicitReducers(_), cluster)
+        .inspectCompletedFlow { flow =>
+          val steps = flow.getFlowSteps.asScala
+          steps.size must_== 1
+
+          val conf = Config.fromHadoop(steps.head.getConfig)
+          conf.getNumReducers must_== Some(explicitNumReducers)
+        }
+        .run
+    }
+
+    doLast { cluster.shutdown() }
   }
 
 }

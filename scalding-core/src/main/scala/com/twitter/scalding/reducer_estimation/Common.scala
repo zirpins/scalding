@@ -69,18 +69,16 @@ object ReducerEstimatorStepStrategy extends FlowStepStrategy[JobConf] {
     step: FlowStep[JobConf]): Unit = {
     val conf = step.getConfig
 
-    val flowNumReducers = flow.getConfig.get(Config.HadoopNumReducers)
     val stepNumReducers = conf.get(Config.HadoopNumReducers)
 
-    // assuming that if the step's reducers is different than the default for the flow,
-    // it was probably set by `withReducers` explicitly. This isn't necessarily true --
-    // Cascading may have changed it for its own reasons.
-    // TODO: disambiguate this by setting something in JobConf when `withReducers` is called
-    // (will be addressed by https://github.com/twitter/scalding/pull/973)
-    val setExplicitly = flowNumReducers != stepNumReducers
+    // 'ExplicitWithReducers' is set by Scalding via Cascading when `withReducers` is used
+    val setExplicitly = Option(conf.get(Config.ExplicitWithReducers)) match {
+      case Some(withReducers) if withReducers == "true" => true
+      case _ => false
+    }
 
-    // log in JobConf what was explicitly set by 'withReducers'
-    if (setExplicitly) conf.set(EstimatorConfig.originalNumReducers, stepNumReducers)
+    // log in JobConf what was originally set (from command-line or .withReducers)
+    conf.set(EstimatorConfig.originalNumReducers, stepNumReducers)
 
     // whether we should override explicitly-specified numReducers
     val overrideExplicit = conf.getBoolean(Config.ReducerEstimatorOverride, false)

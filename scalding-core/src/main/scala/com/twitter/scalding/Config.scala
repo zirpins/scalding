@@ -272,6 +272,9 @@ object Config {
   /** Whether estimator should override manually-specified reducers. */
   val ReducerEstimatorOverride = "scalding.reducer.estimator.override"
 
+  /** Whether num reducers was set explicitly (e.g. by .withReducers) */
+  val ExplicitWithReducers = "scalding.explicit.num.reducers"
+
   val empty: Config = Config(Map.empty)
 
   /*
