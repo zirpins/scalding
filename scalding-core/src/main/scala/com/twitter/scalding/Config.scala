@@ -266,6 +266,10 @@ object Config {
    */
   val HadoopNumReducers = "mapred.reduce.tasks"
 
+  private val Hadoop1JobTracker = "mapred.job.tracker"
+  private val Hadoop2JobTracker = "mapreduce.framework.name"
+  private val HadoopLocalTracker = "local"
+
   /** Name of parameter to specify which class to use as the default estimator. */
   val ReducerEstimators = "scalding.reducer.estimator.classes"
 
@@ -362,10 +366,19 @@ object Config {
    * made on calling here. If you need to update Config, you do it by modifying it.
    * This copy also forces all expressions in values to be evaluated, freezing them
    * as well.
+   *
+   * We now also check to see if a jobtracker has been set and if not, default to
+   * local mode.
    */
-  def fromHadoop(conf: Configuration): Config =
+  def fromHadoop(conf: Configuration): Config = {
+    if (conf.get(Hadoop1JobTracker) == null
+      && conf.get(Hadoop2JobTracker) == null) {
+      conf.set(Hadoop1JobTracker, HadoopLocalTracker)
+      conf.set(Hadoop2JobTracker, HadoopLocalTracker)
+    }
     // use `conf.get` to force JobConf to evaluate expressions
     Config(conf.asScala.map { e => e.getKey -> conf.get(e.getKey) }.toMap)
+  }
 
   /*
    * For everything BUT SERIALIZATION, this prefers values in conf,
