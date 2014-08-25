@@ -1,7 +1,7 @@
 package com.twitter.scalding.reducer_estimation
 
 import com.twitter.scalding._
-import com.twitter.scalding.platform.{ PlatformTests, HadoopPlatformJobTest, LocalCluster }
+import com.twitter.scalding.platform.{ QuietLocalClusterLogging, PlatformTests, HadoopPlatformJobTest, LocalCluster }
 import org.apache.hadoop.mapred.JobConf
 import org.specs._
 import scala.collection.JavaConverters._
@@ -55,6 +55,16 @@ class SimpleJob(args: Args) extends Job(args) {
     .write(counts)
 }
 
+class MultiStepJob(args: Args) extends Job(args) {
+  import HipJob._
+
+  val p = TypedPipe.from(inSrc).flatMap(_.split("^\\w]+"))
+  val g1 = p.map(_.toLowerCase -> 1).group
+  val g2 = p.fork.map(_.toUpperCase -> 1).group
+
+  g1.join(g2).sum.write(TypedTsv("output"))
+}
+
 class SimpleJobWithExplicitReducers(args: Args) extends Job(args) {
   import HipJob._
   TypedPipe.from(inSrc)
@@ -66,7 +76,7 @@ class SimpleJobWithExplicitReducers(args: Args) extends Job(args) {
     .write(counts)
 }
 
-class ReducerEstimatorTest extends PlatformTests {
+class ReducerEstimatorTest extends Specification with QuietLocalClusterLogging {
 
   import HipJob._
 
@@ -105,13 +115,13 @@ class ReducerEstimatorTest extends PlatformTests {
     doFirst { cluster.initialize(conf) }
 
     "run with correct number of reducers in each step" in {
-      HadoopPlatformJobTest(new HipJob(_), cluster)
+      HadoopPlatformJobTest(new MultiStepJob(_), cluster)
         .sink[Double](out)(_.head must beCloseTo(2.86, 0.0001))
         .inspectCompletedFlow { flow =>
           val steps = flow.getFlowSteps.asScala
 
           val reducers = steps.map(_.getConfig.getInt(Config.HadoopNumReducers, 0)).toList
-          reducers must_== List(1, 1, 2)
+          reducers must_== List(1, 1, 1)
         }
         .run
     }

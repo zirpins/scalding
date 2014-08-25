@@ -90,6 +90,7 @@ class GroupBuilder(val groupFields: Fields) extends FoldOperations[GroupBuilder]
    */
   def reducers(r: Int) = {
     if (r > 0) {
+      Thread.dumpStack()
       numReducers = Some(r)
     }
     this

@@ -52,6 +52,8 @@ object RichPipe extends java.io.Serializable {
       val conf = p.getStepConfigDef
       conf.setProperty(Config.HadoopNumReducers, reducers.toString)
       conf.setProperty(Config.ExplicitWithReducers, "true")
+      println("@> setReducers(" + reducers + ") at: \n")
+      //      Thread.dumpStack()
 
     } else if (reducers != -1) {
       throw new IllegalArgumentException("Number of reducers must be non-negative")

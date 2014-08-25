@@ -69,11 +69,7 @@ class TsvNoCacheJob(args: Args) extends Job(args) {
 
 // Keeping all of the specifications in the same tests puts the result output all together at the end.
 // This is useful given that the Hadoop MiniMRCluster and MiniDFSCluster spew a ton of logging.
-class PlatformTests extends Specification {
-
-  Logger.getLogger("org.apache.hadoop").setLevel(Level.ERROR)
-  Logger.getLogger("org.mortbay").setLevel(Level.ERROR)
-  Logger.getLogger("org.apache.hadoop.metrics2").setLevel(Level.ERROR)
+class PlatformTests extends Specification with QuietLocalClusterLogging {
 
   noDetailedDiffs() //Fixes an issue with scala 2.9
 

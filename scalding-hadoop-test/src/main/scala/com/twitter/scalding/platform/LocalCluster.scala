@@ -37,6 +37,7 @@ import org.apache.hadoop.filecache.DistributedCache
 import org.apache.hadoop.fs.{ FileSystem, FileUtil, Path }
 import org.apache.hadoop.hdfs.MiniDFSCluster
 import org.apache.hadoop.mapred.{ JobConf, MiniMRCluster }
+import org.apache.log4j.{ Level, Logger }
 import org.slf4j.LoggerFactory
 import org.slf4j.impl.Log4jLoggerAdapter
 
@@ -190,4 +191,10 @@ class LocalCluster(mutex: Boolean = true) {
       releaseMutex()
     }
   }
+}
+
+trait QuietLocalClusterLogging {
+  Logger.getLogger("org.apache.hadoop").setLevel(Level.ERROR)
+  Logger.getLogger("org.mortbay").setLevel(Level.ERROR)
+  Logger.getLogger("org.apache.hadoop.metrics2").setLevel(Level.ERROR)
 }
