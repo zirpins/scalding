@@ -161,6 +161,7 @@ object ScaldingBuild extends Build {
     scaldingJson,
     scaldingJdbc,
     scaldingHadoopTest,
+    scaldingMacro,
     maple
   )
 
@@ -338,6 +339,15 @@ object ScaldingBuild extends Build {
       "org.slf4j" % "slf4j-log4j12" % slf4jVersion
     )
     }
+  ).dependsOn(scaldingCore)
+
+  lazy val scaldingMacro = module("macro").settings(
+    libraryDependencies <++= (scalaVersion) { scalaVersion => Seq(
+      "org.scala-lang" % "scala-library" % scalaVersion,
+      "org.scala-lang" % "scala-reflect" % scalaVersion
+    ) ++ (if (scalaVersion.startsWith("2.10")) Seq("org.scalamacros" %% "quasiquotes" % "2.0.1") else Seq())
+  },
+  addCompilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
   ).dependsOn(scaldingCore)
 
   // This one uses a different naming convention
