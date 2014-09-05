@@ -5,8 +5,6 @@ import scala.reflect.macros.Context
 import scala.reflect.runtime.universe._
 import scala.util.{ Try => BasicTry }
 
-import cascading.tuple.{ Tuple => CTuple, TupleEntry }
-
 import com.twitter.scalding._
 
 object Macro {
@@ -31,16 +29,17 @@ object Macro {
               case tpe if tpe =:= typeOf[Long] => q"""tup.setLong(${idx}, t.$name)"""
               case tpe if tpe =:= typeOf[Float] => q"""tup.setFloat(${idx}, t.$name)"""
               case tpe if tpe =:= typeOf[Double] => q"""tup.setDouble(${idx}, t.$name)"""
-              case tpe if tpe.typeSymbol.asInstanceOf[ClassSymbol].isCaseClass => q"""tup.set(${idx}, caseClassTupleSetter[${tpe}](t.$name))"""
+              //case tpe if tpe.typeSymbol.asInstanceOf[ClassSymbol].isCaseClass => q"""tup.set(${idx}, caseClassTupleSetter[${tpe}](t.$name))"""
+              case tpe if tpe.typeSymbol.asClass.isCaseClass => q"""tup.set(${idx}, caseClassTupleSetter[${tpe}](t.$name))"""
               case _ => q"""tup.set(${idx}, t.$name)"""
             }
         }
         .foldLeft(q"") { (cum, next) => q"""$cum;$next""" }
 
     val res = q"""
-    new TupleSetter[${tag.tpe}] {
-      override def apply(t: ${tag.tpe}): CTuple = {
-        val tup = CTuple.size(${params.size})
+    new _root_.com.twitter.scalding.TupleSetter[${tag.tpe}] {
+      override def apply(t: ${tag.tpe}): _root_.cascading.tuple.Tuple = {
+        val tup = _root_.cascading.tuple.Tuple.size(${params.size})
         $set
         tup
       }
@@ -71,14 +70,20 @@ object Macro {
               case tpe if tpe =:= typeOf[Long] => q"""tup.getLong(${idx})"""
               case tpe if tpe =:= typeOf[Float] => q"""tup.getFloat(${idx})"""
               case tpe if tpe =:= typeOf[Double] => q"""tup.getDouble(${idx})"""
-              case tpe if tpe.typeSymbol.asInstanceOf[ClassSymbol].isCaseClass => q"""caseClassTupleConverter[${tpe}](new TupleEntry(tup.getObject(${idx}).asInstanceOf[CTuple]))"""
+              case tpe if tpe.typeSymbol.asClass.isCaseClass =>
+                q"""
+                caseClassTupleConverter[${tpe}](
+                  new _root_.cascading.tuple.TupleEntry(tup.getObject(${idx})
+                    .asInstanceOf[_root_.cascading.tuple.Tuple])
+                )
+                """
               case tpe => q"""tup.getObject(${idx}).asInstanceOf[${tpe}]"""
             }
         }
 
     val res = q"""
-    new TupleConverter[${tag.tpe}] {
-      override def apply(t: TupleEntry): ${tag.tpe} = {
+    new _root_.com.twitter.scalding.TupleConverter[${tag.tpe}] {
+      override def apply(t: _root_.cascading.tuple.TupleEntry): ${tag.tpe} = {
         val tup = t.getTuple()
         ${tag.tpe.typeSymbol.companionSymbol}(..$gets)
       }
@@ -89,5 +94,5 @@ object Macro {
   }
 
   def isCaseClass[T](c: Context)(implicit tag: c.WeakTypeTag[T]): Boolean =
-    BasicTry { tag.tpe.typeSymbol.asInstanceOf[ClassSymbol].isCaseClass }.toOption.getOrElse(false)
+    BasicTry { tag.tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)
 }
