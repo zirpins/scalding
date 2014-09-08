@@ -11,6 +11,6 @@ object Macros {
 }
 
 /**
- * This class is meant to be used exclusively to allow the type system to prove that a class is or is not a case class.
+ * This trait is meant to be used exclusively to allow the type system to prove that a class is or is not a case class.
  */
-case class IsCaseClass[T]()
+trait IsCaseClass[T]

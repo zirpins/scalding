@@ -16,13 +16,18 @@ object MacroImpl {
   def isCaseClassImpl[T](c: Context)(implicit T: c.WeakTypeTag[T]): c.Expr[IsCaseClass[T]] = {
     import c.universe._
     if (isCaseClassType(c)(T.tpe)) {
-      c.Expr[IsCaseClass[T]](q"""_root_.com.twitter.scalding.macros.IsCaseClass[$T]()""")
+      c.Expr[IsCaseClass[T]](q"""new _root_.com.twitter.scalding.macros.impl.MacroGeneratedIsCaseClass[$T] { }""")
     } else {
       c.abort(c.enclosingPosition, "Type parameter is not a case class")
     }
   }
 
-  def caseClassTupleSetterImpl[T](c: Context)(proof: c.Expr[IsCaseClass[T]])(implicit T: c.WeakTypeTag[T]): c.Expr[TupleSetter[T]] = {
+  def caseClassTupleSetterNoProof[T]: TupleSetter[T] = macro caseClassTupleSetterNoProofImpl[T]
+
+  def caseClassTupleSetterImpl[T](c: Context)(proof: c.Expr[IsCaseClass[T]])(implicit T: c.WeakTypeTag[T]): c.Expr[TupleSetter[T]] =
+    caseClassTupleSetterNoProofImpl(c)(T)
+
+  def caseClassTupleSetterNoProofImpl[T](c: Context)(implicit T: c.WeakTypeTag[T]): c.Expr[TupleSetter[T]] = {
     import c.universe._
     val set =
       T.tpe.declarations
@@ -41,7 +46,7 @@ object MacroImpl {
               case tpe if isCaseClassType(c)(tpe) => q"""
                 tup.set(
                   ${idx},
-                  _root_.com.twitter.scalding.macros.impl.MacroImpl.caseClassTupleSetter[$tpe](t.$m)
+                  _root_.com.twitter.scalding.macros.impl.MacroImpl.caseClassTupleSetterNoProof[$tpe](t.$m)
                 )
                 """
               case _ => q"""tup.set(${idx}, t.$m)"""
@@ -49,7 +54,7 @@ object MacroImpl {
         }
 
     c.Expr[TupleSetter[T]](q"""
-    new _root_.com.twitter.scalding.TupleSetter[$T] {
+    new _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleSetter[$T] {
       override def apply(t: $T): _root_.cascading.tuple.Tuple = {
         val tup = _root_.cascading.tuple.Tuple.size(${set.size})
         ..$set
@@ -60,7 +65,12 @@ object MacroImpl {
     """)
   }
 
-  def caseClassTupleConverterImpl[T](c: Context)(proof: c.Expr[IsCaseClass[T]])(implicit T: c.WeakTypeTag[T]): c.Expr[TupleConverter[T]] = {
+  def caseClassTupleConverterNoProof[T]: TupleConverter[T] = macro caseClassTupleConverterNoProofImpl[T]
+
+  def caseClassTupleConverterImpl[T](c: Context)(proof: c.Expr[IsCaseClass[T]])(implicit T: c.WeakTypeTag[T]): c.Expr[TupleConverter[T]] =
+    caseClassTupleConverterNoProofImpl(c)(T)
+
+  def caseClassTupleConverterNoProofImpl[T](c: Context)(implicit T: c.WeakTypeTag[T]): c.Expr[TupleConverter[T]] = {
     import c.universe._
     val get =
       T.tpe.declarations
@@ -78,7 +88,7 @@ object MacroImpl {
               case tpe if tpe =:= typeOf[Double] => q"""tup.getDouble(${idx})"""
               case tpe if isCaseClassType(c)(tpe) =>
                 q"""
-                _root_.com.twitter.scalding.macros.impl.MacroImpl.caseClassTupleConverter[$tpe](
+                _root_.com.twitter.scalding.macros.impl.MacroImpl.caseClassTupleConverterNoProof[$tpe](
                   new _root_.cascading.tuple.TupleEntry(tup.getObject(${idx}).asInstanceOf[_root_.cascading.tuple.Tuple])
                 )
                 """
@@ -87,7 +97,7 @@ object MacroImpl {
         }
 
     c.Expr[TupleConverter[T]](q"""
-    new _root_.com.twitter.scalding.TupleConverter[$T] {
+    new _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleConverter[$T] {
       override def apply(t: _root_.cascading.tuple.TupleEntry): $T = {
         val tup = t.getTuple()
         ${T.tpe.typeSymbol.companionSymbol}(..$get)
@@ -100,3 +110,12 @@ object MacroImpl {
   def isCaseClassType(c: Context)(tpe: c.universe.Type): Boolean =
     BasicTry { tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)
 }
+
+/**
+ * These traits allow us to inspect if a given TupleSetter of TupleConverter was generated. This is particularly
+ * useful for testing.
+ */
+trait MacroGenerated
+trait MacroGeneratedTupleSetter[T] extends TupleSetter[T] with MacroGenerated
+trait MacroGeneratedTupleConverter[T] extends TupleConverter[T] with MacroGenerated
+trait MacroGeneratedIsCaseClass[T] extends IsCaseClass[T] with MacroGenerated
