@@ -95,12 +95,12 @@ object MacroImpl {
               case tpe => q"""tup.getObject(${idx}).asInstanceOf[$tpe]"""
             }
         }
-
+    val companion = T.tpe.typeSymbol.companionSymbol
     c.Expr[TupleConverter[T]](q"""
     new _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleConverter[$T] {
       override def apply(t: _root_.cascading.tuple.TupleEntry): $T = {
         val tup = t.getTuple()
-        ${T.tpe.typeSymbol.companionSymbol}(..$get)
+        $companion(..$get)
       }
       override def arity = ${get.size}
     }
@@ -112,8 +112,8 @@ object MacroImpl {
 }
 
 /**
- * These traits allow us to inspect if a given TupleSetter of TupleConverter was generated. This is particularly
- * useful for testing.
+ * These traits allow us to inspect if a given TupleSetter of TupleConverter was generated. This is useful for
+ * avoiding LowPriorityTupleConverters.singleConverter
  */
 trait MacroGenerated
 trait MacroGeneratedTupleSetter[T] extends TupleSetter[T] with MacroGenerated

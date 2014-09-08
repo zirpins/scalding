@@ -1,6 +1,6 @@
 package com.twitter.scalding.macros
 
-import org.scalatest._
+import org.scalatest.WordSpec
 import com.twitter.scalding.macros.{ _ => _ }
 
 /**
