@@ -1,4 +1,4 @@
-package com.twitter.scalding.macroimpl
+package com.twitter.scalding.macros.impl
 
 import scala.language.experimental.macros
 import scala.reflect.macros.Context
@@ -6,14 +6,24 @@ import scala.reflect.runtime.universe._
 import scala.util.{ Try => BasicTry }
 
 import com.twitter.scalding._
+import com.twitter.scalding.macros.IsCaseClass
 
-object Macro {
-  def caseClassTupleSetter[T]: TupleSetter[T] = macro caseClassTupleSetterImpl[T]
-  def caseClassTupleSetterImpl[T](c: Context)(implicit T: c.WeakTypeTag[T]): c.Expr[TupleSetter[T]] = {
+/**
+ * This class contains the core macro implementations. This is in a separate module to allow it to be in
+ * a separate compilation unit, which makes it easier to provide helper methods interfacing with macros.
+ */
+object MacroImpl {
+  def isCaseClassImpl[T](c: Context)(implicit T: c.WeakTypeTag[T]): c.Expr[IsCaseClass[T]] = {
     import c.universe._
-    if (!isCaseClass[T](c)) {
-      throw new IllegalArgumentException("Type parameter of caseClassTupleSetter must be a case class")
+    if (isCaseClassType(c)(T.tpe)) {
+      c.Expr[IsCaseClass[T]](q"""_root_.com.twitter.scalding.macros.IsCaseClass[$T]()""")
+    } else {
+      c.abort(c.enclosingPosition, "Type parameter is not a case class")
     }
+  }
+
+  def caseClassTupleSetterImpl[T](c: Context)(proof: c.Expr[IsCaseClass[T]])(implicit T: c.WeakTypeTag[T]): c.Expr[TupleSetter[T]] = {
+    import c.universe._
     val set =
       T.tpe.declarations
         .collect { case m: MethodSymbol if m.isCaseAccessor => m }
@@ -28,12 +38,17 @@ object Macro {
               case tpe if tpe =:= typeOf[Long] => q"""tup.setLong(${idx}, t.$m)"""
               case tpe if tpe =:= typeOf[Float] => q"""tup.setFloat(${idx}, t.$m)"""
               case tpe if tpe =:= typeOf[Double] => q"""tup.setDouble(${idx}, t.$m)"""
-              case tpe if isCaseClassType(c)(tpe) => q"""tup.set(${idx}, caseClassTupleSetter[${tpe}](t.$m))"""
+              case tpe if isCaseClassType(c)(tpe) => q"""
+                tup.set(
+                  ${idx},
+                  _root_.com.twitter.scalding.macros.impl.MacroImpl.caseClassTupleSetter[$tpe](t.$m)
+                )
+                """
               case _ => q"""tup.set(${idx}, t.$m)"""
             }
         }
 
-    val res = q"""
+    c.Expr[TupleSetter[T]](q"""
     new _root_.com.twitter.scalding.TupleSetter[$T] {
       override def apply(t: $T): _root_.cascading.tuple.Tuple = {
         val tup = _root_.cascading.tuple.Tuple.size(${set.size})
@@ -42,18 +57,11 @@ object Macro {
       }
       override def arity = ${set.size}
     }
-    """
-    c.Expr[TupleSetter[T]](res)
+    """)
   }
 
-  def caseClassTupleConverter[T]: TupleConverter[T] = macro caseClassTupleConverterImpl[T]
-  def caseClassTupleConverterImpl[T](c: Context)(implicit T: c.WeakTypeTag[T]): c.Expr[TupleConverter[T]] = {
+  def caseClassTupleConverterImpl[T](c: Context)(proof: c.Expr[IsCaseClass[T]])(implicit T: c.WeakTypeTag[T]): c.Expr[TupleConverter[T]] = {
     import c.universe._
-    if (!isCaseClass[T](c)) {
-      throw new IllegalArgumentException("Type parameter of caseClassTupleConverter must be a case class")
-    }
-    //TODO go over it recursively to get the caseClassTupleConverters that we need. May make more sense
-    // to return it when we go over it in this case?
     val get =
       T.tpe.declarations
         .collect { case m: MethodSymbol if m.isCaseAccessor => m.returnType }
@@ -70,16 +78,15 @@ object Macro {
               case tpe if tpe =:= typeOf[Double] => q"""tup.getDouble(${idx})"""
               case tpe if isCaseClassType(c)(tpe) =>
                 q"""
-                caseClassTupleConverter[${tpe}](
-                  new _root_.cascading.tuple.TupleEntry(tup.getObject(${idx})
-                    .asInstanceOf[_root_.cascading.tuple.Tuple])
+                _root_.com.twitter.scalding.macros.impl.MacroImpl.caseClassTupleConverter[$tpe](
+                  new _root_.cascading.tuple.TupleEntry(tup.getObject(${idx}).asInstanceOf[_root_.cascading.tuple.Tuple])
                 )
                 """
-              case tpe => q"""tup.getObject(${idx}).asInstanceOf[${tpe}]"""
+              case tpe => q"""tup.getObject(${idx}).asInstanceOf[$tpe]"""
             }
         }
 
-    val res = q"""
+    c.Expr[TupleConverter[T]](q"""
     new _root_.com.twitter.scalding.TupleConverter[$T] {
       override def apply(t: _root_.cascading.tuple.TupleEntry): $T = {
         val tup = t.getTuple()
@@ -87,11 +94,8 @@ object Macro {
       }
       override def arity = ${get.size}
     }
-    """
-    c.Expr[TupleConverter[T]](res)
+    """)
   }
-
-  def isCaseClass[T](c: Context)(implicit T: c.WeakTypeTag[T]): Boolean = isCaseClassType(c)(T.tpe)
 
   def isCaseClassType(c: Context)(tpe: c.universe.Type): Boolean =
     BasicTry { tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)

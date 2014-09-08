@@ -161,7 +161,7 @@ object ScaldingBuild extends Build {
     scaldingJson,
     scaldingJdbc,
     scaldingHadoopTest,
-    scaldingMacro,
+    scaldingMacros,
     maple
   )
 
@@ -341,7 +341,8 @@ object ScaldingBuild extends Build {
     }
   ).dependsOn(scaldingCore)
 
-  lazy val scaldingMacro = module("macro").settings(
+  //TODO clean up deps
+  lazy val scaldingMacros = module("macros").settings(
     libraryDependencies <++= (scalaVersion) { scalaVersion => Seq(
       "org.scala-lang" % "scala-library" % scalaVersion,
       "org.scala-lang" % "scala-reflect" % scalaVersion
