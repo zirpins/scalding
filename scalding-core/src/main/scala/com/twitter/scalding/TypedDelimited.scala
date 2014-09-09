@@ -16,10 +16,10 @@
 package com.twitter.scalding
 
 import java.io.Serializable
-import java.lang.reflect.Type
+import java.lang.reflect.{ Type => JType }
 
 import scala.reflect.runtime.universe.TypeTag
-import scala.util.Try
+import scala.util.{ Try => STry }
 
 import cascading.tuple.Fields
 
@@ -97,7 +97,7 @@ object FixedPathTypedDelimited {
  * e.g. TypedTsv[Tuple1[List[Int]]]
  */
 trait TypedDelimited[T] extends DelimitedScheme with Mappable[T] with TypedSink[T] {
-  import scala.reflect.runtime.universe.{ Try => _, Type => _, _ }
+  import scala.reflect.runtime.universe._
 
   override val skipHeader: Boolean = false
   override val writeHeader: Boolean = false
@@ -110,28 +110,29 @@ trait TypedDelimited[T] extends DelimitedScheme with Mappable[T] with TypedSink[
   override def converter[U >: T] = TupleConverter.asSuperConverter[T, U](conv)
   override def setter[U <: T] = TupleSetter.asSubSetter[T, U](tset)
 
-  override val types: Array[Class[_]] = {
-    //TODO if we support case classes with type parameters, then the tuple/case class are the same
-    val mirror = runtimeMirror(getClass.getClassLoader)
-    //Assume this is a Tuple:
-    if (mf.tpe <:< typeOf[scala.Product]) {
-      (mf.tpe match { case TypeRef(_, _, args) => args })
-        .map { x => mirror.runtimeClass(x.typeSymbol.asClass) }
-        .toArray
-      // We want to support case classes more cleanly
-    } else if (Try { mf.tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)) {
-      mf.tpe.declarations
-        .collect { case m: MethodSymbol if m.isCaseAccessor => mirror.runtimeClass(m.returnType) }
+  override val types: Array[Class[_]] =
+    // This will support both any type of case class with mixed type paramters, which covers Tuples
+    (if (STry { mf.tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)) {
+      mf.tpe
+        .declarations
+        .collect {
+          case m: MethodSymbol if m.isCaseAccessor =>
+            m.typeSignatureIn(mf.tpe)
+              .declarations
+              .collect { case m: MethodSymbol if m.isPrimaryConstructor => m.returnType }
+              .head
+              .typeSymbol
+              .asClass
+        }
         .toArray
     } else {
       //Assume there is only a single item
-      Array(mirror.runtimeClass(mf.tpe.typeSymbol.asClass))
-    }
-  }
+      Array(mf.tpe.typeSymbol.asClass)
+    }).map { mf.mirror.runtimeClass(_) }
 
   // This is used to add types to a Field, which Cascading now supports. While we do not do this much generally
   // through the code, it is good practice and something that, ideally, we can do wherever possible.
-  def addTypes(sel: Array[Comparable[_]]) = new Fields(sel, types.map(_.asInstanceOf[Type]))
+  def addTypes(sel: Array[Comparable[_]]) = new Fields(sel, types.map(_.asInstanceOf[JType]))
 
   override val fields: Fields = addTypes((0 until types.length).toArray.map(_.asInstanceOf[Comparable[_]]))
   final override def sinkFields = fields
