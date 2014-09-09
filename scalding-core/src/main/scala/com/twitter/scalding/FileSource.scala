@@ -152,18 +152,17 @@ abstract class FileSource extends SchemedSource with LocalSourceOverride {
         case Write => CastHfsTap(new Hfs(hdfsScheme, hdfsWritePath, sinkMode))
       }
       case _ => {
-        allCatch.opt(
-          TestTapFactory(this, hdfsScheme, sinkMode)).map {
-            _.createTap(readOrWrite) // these java types are invariant, so we cast here
-              .asInstanceOf[Tap[Any, Any, Any]]
-          }
+        TestTapFactory(this, hdfsScheme, sinkMode).createTap(readOrWrite).asInstanceOf[Tap[Any, Any, Any]] // these java types are invariant, so we cast here
+
+        /*
           .orElse {
             allCatch.opt(
               TestTapFactory(this, localScheme.getSourceFields, sinkMode)).map {
                 _.createTap(readOrWrite)
                   .asInstanceOf[Tap[Any, Any, Any]]
               }
-          }.getOrElse(sys.error("Failed to create a tap for: " + toString))
+          */
+        //}.getOrElse(sys.error("Failed to create a tap for: " + toString))
       }
     }
   }

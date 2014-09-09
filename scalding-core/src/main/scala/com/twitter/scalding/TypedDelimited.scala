@@ -18,6 +18,9 @@ package com.twitter.scalding
 import java.io.Serializable
 import java.lang.reflect.Type
 
+import scala.reflect.runtime.universe.TypeTag
+import scala.util.Try
+
 import cascading.tuple.Fields
 
 /**
@@ -93,28 +96,38 @@ object FixedPathTypedDelimited {
  * If T is a subclass of Product, we assume it is a tuple. If it is not, wrap T in a Tuple1:
  * e.g. TypedTsv[Tuple1[List[Int]]]
  */
-trait TypedDelimited[T] extends DelimitedScheme
-  with Mappable[T] with TypedSink[T] {
+trait TypedDelimited[T] extends DelimitedScheme with Mappable[T] with TypedSink[T] {
+  import scala.reflect.runtime.universe.{ Try => _, Type => _, _ }
 
   override val skipHeader: Boolean = false
   override val writeHeader: Boolean = false
   override val separator: String = "\t"
 
-  implicit val mf: Manifest[T]
+  implicit val mf: TypeTag[T]
   implicit val conv: TupleConverter[T]
   implicit val tset: TupleSetter[T]
 
   override def converter[U >: T] = TupleConverter.asSuperConverter[T, U](conv)
   override def setter[U <: T] = TupleSetter.asSubSetter[T, U](tset)
 
-  override val types: Array[Class[_]] =
-    if (classOf[scala.Product].isAssignableFrom(mf.erasure)) {
-      //Assume this is a Tuple:
-      mf.typeArguments.map { _.erasure }.toArray
+  override val types: Array[Class[_]] = {
+    //TODO if we support case classes with type parameters, then the tuple/case class are the same
+    val mirror = runtimeMirror(getClass.getClassLoader)
+    //Assume this is a Tuple:
+    if (mf.tpe <:< typeOf[scala.Product]) {
+      (mf.tpe match { case TypeRef(_, _, args) => args })
+        .map { x => mirror.runtimeClass(x.typeSymbol.asClass) }
+        .toArray
+      // We want to support case classes more cleanly
+    } else if (Try { mf.tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)) {
+      mf.tpe.declarations
+        .collect { case m: MethodSymbol if m.isCaseAccessor => mirror.runtimeClass(m.returnType) }
+        .toArray
     } else {
       //Assume there is only a single item
-      Array(mf.erasure)
+      Array(mirror.runtimeClass(mf.tpe.typeSymbol.asClass))
     }
+  }
 
   // This is used to add types to a Field, which Cascading now supports. While we do not do this much generally
   // through the code, it is good practice and something that, ideally, we can do wherever possible.
@@ -128,7 +141,7 @@ class FixedPathTypedDelimited[T](p: Seq[String],
   override val fields: Fields = Fields.ALL,
   override val skipHeader: Boolean = false,
   override val writeHeader: Boolean = false,
-  override val separator: String = "\t")(implicit override val mf: Manifest[T], override val conv: TupleConverter[T],
+  override val separator: String = "\t")(implicit override val mf: TypeTag[T], override val conv: TupleConverter[T],
     override val tset: TupleSetter[T]) extends FixedPathSource(p: _*)
   with TypedDelimited[T] {
 

@@ -31,7 +31,8 @@ object ScaldingBuild extends Build {
     libraryDependencies ++= Seq(
       "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
       "org.scala-tools.testing" %% "specs" % "1.6.9" % "test",
-      "org.mockito" % "mockito-all" % "1.8.5" % "test"
+      "org.mockito" % "mockito-all" % "1.8.5" % "test",
+      "org.scalatest" %% "scalatest" % "2.2.2"
     ),
 
     resolvers ++= Seq(
@@ -60,6 +61,9 @@ object ScaldingBuild extends Build {
     parallelExecution in Test := false,
 
     scalacOptions ++= Seq("-unchecked", "-deprecation"),
+
+    // Enables full stack traces in scalatest
+    testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-oF"),
 
     // Uncomment if you don't want to run all the tests before building assembly
     // test in assembly := {},
@@ -341,16 +345,14 @@ object ScaldingBuild extends Build {
     }
   ).dependsOn(scaldingCore)
 
-  //TODO clean up deps
   lazy val scaldingMacros = module("macros").settings(
     libraryDependencies <++= (scalaVersion) { scalaVersion => Seq(
       "org.scala-lang" % "scala-library" % scalaVersion,
-      "org.scala-lang" % "scala-reflect" % scalaVersion,
-      "org.scalatest" %% "scalatest" % "2.2.2"
+      "org.scala-lang" % "scala-reflect" % scalaVersion
     ) ++ (if (scalaVersion.startsWith("2.10")) Seq("org.scalamacros" %% "quasiquotes" % "2.0.1") else Seq())
   },
   addCompilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
-  ).dependsOn(scaldingCore)
+  ).dependsOn(scaldingCore, scaldingHadoopTest)
 
   // This one uses a different naming convention
   lazy val maple = Project(
