@@ -3,7 +3,6 @@ package com.twitter.scalding.macros
 import org.scalatest.{ Matchers, WordSpec }
 
 import com.twitter.scalding._
-import com.twitter.scalding.macros.MacroImplicits
 import com.twitter.scalding.macros.impl.MacroGenerated
 import com.twitter.scalding.platform.{ HadoopPlatformTest, HadoopPlatformJobTest }
 
@@ -32,6 +31,7 @@ class InAOutBJob(args: Args) extends Job(args) {
 // This tests all of the logic we can test without running the full integration tests
 class MacroJobTest extends WordSpec with Matchers {
   import InAOutBJob._
+
   "An InAOutBJob" should {
     "use the macro generated setters and converters" in {
       inTypedTsv.conv shouldBe a[MacroGenerated]
@@ -50,6 +50,40 @@ class MacroJobTest extends WordSpec with Matchers {
     }
   }
 }
+//****
+// TODO REMOVE BEFORE SUBMITTING
+//****
+object TupleInAOutBJob {
+  def transform(a: (Int, String, Double)): (String, Double, Int) = a match { case (x, y, z) => (y + y, z, x * x) }
+  val inTypedTsv = TypedTsv[(Int, String, Double)]("input")
+  val outTypedTsv = TypedTsv[(String, Double, Int)]("output")
+
+  val input = List(
+    (1, "one", 1.8),
+    (-11, "blahjkdsf", -3.3488))
+
+  val output = input.map(transform)
+}
+class TupleInAOutBJob(args: Args) extends Job(args) {
+  import TupleInAOutBJob._
+
+  TypedPipe.from(inTypedTsv).map(transform).write(outTypedTsv)
+}
+
+// This tests all of the logic we can test without running the full integration tests
+class TupleJobTest extends WordSpec with Matchers {
+  import TupleInAOutBJob._
+  "An TupleInAOutBJob" should {
+    "evaluate as expected" in {
+      JobTest(new TupleInAOutBJob(_))
+        .source(inTypedTsv, input)
+        .typedSink(outTypedTsv) { _.toSet shouldBe output.toSet }
+        .run
+        .runHadoop
+        .finish
+    }
+  }
+}
 
 class MacroPlatformTests extends WordSpec with Matchers with HadoopPlatformTest {
   import InAOutBJob._
@@ -57,8 +91,8 @@ class MacroPlatformTests extends WordSpec with Matchers with HadoopPlatformTest 
   "An InAOutBJob" should {
     "handle case classes properly" in {
       HadoopPlatformJobTest(new InAOutBJob(_), cluster)
-        .source("input", input)
-        .sink[OutB]("output") { _.toSet shouldBe output.toSet }
+        .source(inTypedTsv, input)
+        .sink[OutB](outTypedTsv) { _.toSet shouldBe output.toSet }
         .run
     }
   }

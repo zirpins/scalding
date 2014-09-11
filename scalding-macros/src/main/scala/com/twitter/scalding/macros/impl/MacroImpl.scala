@@ -5,6 +5,8 @@ import scala.reflect.macros.Context
 import scala.reflect.runtime.universe._
 import scala.util.{ Try => BasicTry }
 
+import cascading.tuple.{ Tuple, TupleEntry }
+
 import com.twitter.scalding._
 import com.twitter.scalding.macros.IsCaseClass
 
@@ -52,17 +54,17 @@ object MacroImpl {
               case _ => q"""tup.set(${idx}, t.$m)"""
             }
         }
-
-    c.Expr[TupleSetter[T]](q"""
-    new _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleSetter[$T] {
-      override def apply(t: $T): _root_.cascading.tuple.Tuple = {
+    val res = q"""
+    _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleSetter[$T](
+      { t: $T =>
         val tup = _root_.cascading.tuple.Tuple.size(${set.size})
         ..$set
         tup
-      }
-      override def arity = ${set.size}
-    }
-    """)
+      },
+      ${set.size}
+    )
+    """
+    c.Expr[TupleSetter[T]](res)
   }
 
   def caseClassTupleConverterNoProof[T]: TupleConverter[T] = macro caseClassTupleConverterNoProofImpl[T]
@@ -95,16 +97,17 @@ object MacroImpl {
               case tpe => q"""tup.getObject(${idx}).asInstanceOf[$tpe]"""
             }
         }
-    val companion = T.tpe.typeSymbol.companionSymbol
-    c.Expr[TupleConverter[T]](q"""
-    new _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleConverter[$T] {
-      override def apply(t: _root_.cascading.tuple.TupleEntry): $T = {
+    val companion = newTermName(T.tpe.typeSymbol.companionSymbol.fullName) //TODO is there a better way to get it to resolve thiss?
+    val res = q"""
+    _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleConverter[$T](
+      { t: _root_.cascading.tuple.TupleEntry =>
         val tup = t.getTuple()
-        $companion(..$get)
-      }
-      override def arity = ${get.size}
-    }
-    """)
+        ${companion}(..$get)
+      },
+      ${get.size}
+    )
+    """
+    c.Expr[TupleConverter[T]](res)
   }
 
   def isCaseClassType(c: Context)(tpe: c.universe.Type): Boolean =
@@ -116,6 +119,10 @@ object MacroImpl {
  * avoiding LowPriorityTupleConverters.singleConverter
  */
 trait MacroGenerated
-trait MacroGeneratedTupleSetter[T] extends TupleSetter[T] with MacroGenerated
-trait MacroGeneratedTupleConverter[T] extends TupleConverter[T] with MacroGenerated
-trait MacroGeneratedIsCaseClass[T] extends IsCaseClass[T] with MacroGenerated
+case class MacroGeneratedTupleSetter[T](fn: T => Tuple, override val arity: Int) extends TupleSetter[T] with MacroGenerated {
+  override def apply(t: T) = fn(t)
+}
+case class MacroGeneratedTupleConverter[T](fn: TupleEntry => T, override val arity: Int) extends TupleConverter[T] with MacroGenerated {
+  override def apply(t: TupleEntry) = fn(t)
+}
+case class MacroGeneratedIsCaseClass[T]() extends IsCaseClass[T] with MacroGenerated

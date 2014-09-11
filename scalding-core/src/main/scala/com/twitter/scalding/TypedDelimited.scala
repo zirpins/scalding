@@ -111,7 +111,7 @@ trait TypedDelimited[T] extends DelimitedScheme with Mappable[T] with TypedSink[
   override def setter[U <: T] = TupleSetter.asSubSetter[T, U](tset)
 
   override val types: Array[Class[_]] =
-    // This will support both any type of case class with mixed type paramters, which covers Tuples
+    // This will support both any type of case class with mixed type parameters, which covers Tuples
     (if (STry { mf.tpe.typeSymbol.asClass.isCaseClass }.toOption.getOrElse(false)) {
       mf.tpe
         .declarations
@@ -132,7 +132,10 @@ trait TypedDelimited[T] extends DelimitedScheme with Mappable[T] with TypedSink[
 
   // This is used to add types to a Field, which Cascading now supports. While we do not do this much generally
   // through the code, it is good practice and something that, ideally, we can do wherever possible.
-  def addTypes(sel: Array[Comparable[_]]) = new Fields(sel, types.map(_.asInstanceOf[JType]))
+  def addTypes(sel: Array[Comparable[_]]) = {
+    assert(sel.size == types.size, "Array of comparables [" + sel + "] had different size than array of types [" + types.mkString(",") + "]")
+    new Fields(sel, types.map(_.asInstanceOf[JType]))
+  }
 
   override val fields: Fields = addTypes((0 until types.length).toArray.map(_.asInstanceOf[Comparable[_]]))
   final override def sinkFields = fields

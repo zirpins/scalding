@@ -272,17 +272,19 @@ trait DelimitedScheme extends SchemedSource {
   //These should not be changed:
   override def localScheme = new CLTextDelimited(fields, skipHeader, writeHeader, separator, strict, quote, types, safe)
 
-  override def hdfsScheme =
+  override def hdfsScheme = {
+    assert(
+      types == null || fields.size == types.size,
+      "Fields [" + fields + "] of different size than types array [" + types.mkString(",") + "]")
     HadoopSchemeInstance(new CHTextDelimited(fields, null, skipHeader, writeHeader, separator, strict, quote, types, safe))
+  }
 }
 
 trait SequenceFileScheme extends SchemedSource {
   //override these as needed:
   val fields = Fields.ALL
   // TODO Cascading doesn't support local mode yet
-  override def hdfsScheme = {
-    HadoopSchemeInstance(new CHSequenceFile(fields))
-  }
+  override def hdfsScheme = HadoopSchemeInstance(new CHSequenceFile(fields))
 }
 
 /**
@@ -290,9 +292,8 @@ trait SequenceFileScheme extends SchemedSource {
  * as well as the requirements of [[FileSource.pathIsGood]]
  */
 trait SuccessFileSource extends FileSource {
-  override protected def pathIsGood(p: String, conf: Configuration) = {
+  override protected def pathIsGood(p: String, conf: Configuration) =
     FileSource.globHasNonHiddenPaths(p, conf) && FileSource.globHasSuccessFile(p, conf)
-  }
 }
 
 /**
