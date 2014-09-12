@@ -39,25 +39,17 @@ class MacrosUnitTests extends WordSpec with Matchers {
   }
 
   "MacroGenerated TupleSetter" should {
-    def doesJavaWork[T](implicit set: TupleSetter[T]) {
-      canExternalize(isMg(set))
-    }
-    "be serializable" in {
-      doesJavaWork[A]
-      doesJavaWork[B]
-      doesJavaWork[C]
-    }
+    def doesJavaWork[T](implicit set: TupleSetter[T]) { canExternalize(isMg(set)) }
+    "be serializable for case class A" in { doesJavaWork[A] }
+    "be serializable for case class B" in { doesJavaWork[B] }
+    "be serializable for case class C" in { doesJavaWork[C] }
   }
 
   "MacroGenerated TupleConverter" should {
-    def doesJavaWork[T](implicit conv: TupleConverter[T]) {
-      canExternalize(isMg(conv))
-    }
-    "be serializable" in {
-      doesJavaWork[A]
-      doesJavaWork[B]
-      doesJavaWork[C]
-    }
+    def doesJavaWork[T](implicit conv: TupleConverter[T]) { canExternalize(isMg(conv)) }
+    "be serializable for case class A" in { doesJavaWork[A] }
+    "be serializable for case class B" in { doesJavaWork[B] }
+    "be serializable for case class C" in { doesJavaWork[C] }
   }
 
   "MacroGenerated TupleSetter and TupleConverter" should {
