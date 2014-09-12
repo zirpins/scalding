@@ -97,12 +97,12 @@ object MacroImpl {
               case tpe => q"""tup.getObject(${idx}).asInstanceOf[$tpe]"""
             }
         }
-    val companion = newTermName(T.tpe.typeSymbol.companionSymbol.fullName) //TODO is there a better way to get it to resolve thiss?
+    val companion = T.tpe.typeSymbol.companionSymbol
     val res = q"""
     _root_.com.twitter.scalding.macros.impl.MacroGeneratedTupleConverter[$T](
       { t: _root_.cascading.tuple.TupleEntry =>
         val tup = t.getTuple()
-        ${companion}(..$get)
+        $companion(..$get)
       },
       ${get.size}
     )
