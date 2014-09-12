@@ -7,6 +7,7 @@ import org.scalatest.{ Matchers, WordSpec }
 import com.twitter.scalding._
 import com.twitter.scalding.macros._
 import com.twitter.scalding.macros.impl._
+import com.twitter.scalding.serialization.Externalizer
 
 class MacrosUnitTests extends WordSpec with Matchers {
   // Note: if these are nested in a method, it will not work, likely due to the way scala mangles the names.
@@ -31,6 +32,32 @@ class MacrosUnitTests extends WordSpec with Matchers {
     val inter = mgConv(te)
     inter shouldBe t
     mgSet(inter) shouldBe te
+  }
+
+  def canExternalize(t: AnyRef) {
+    Externalizer(t).javaWorks shouldBe true
+  }
+
+  "MacroGenerated TupleSetter" should {
+    def doesJavaWork[T](implicit set: TupleSetter[T]) {
+      canExternalize(isMg(set))
+    }
+    "be serializable" in {
+      doesJavaWork[A]
+      doesJavaWork[B]
+      doesJavaWork[C]
+    }
+  }
+
+  "MacroGenerated TupleConverter" should {
+    def doesJavaWork[T](implicit conv: TupleConverter[T]) {
+      canExternalize(isMg(conv))
+    }
+    "be serializable" in {
+      doesJavaWork[A]
+      doesJavaWork[B]
+      doesJavaWork[C]
+    }
   }
 
   "MacroGenerated TupleSetter and TupleConverter" should {
