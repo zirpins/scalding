@@ -9,12 +9,12 @@ import com.twitter.scalding.macros._
 import com.twitter.scalding.macros.impl._
 import com.twitter.scalding.serialization.Externalizer
 
-class MacrosUnitTests extends WordSpec with Matchers {
-  // Note: if these are nested in a method, it will not work, likely due to the way scala mangles the names.
-  case class A(x: Int, y: String)
-  case class B(a1: A, a2: A, y: String)
-  case class C(a: A, b: B, c: A, d: B, e: B)
+// We avoid nesting these just to avoid any complications in the serialization test
+case class A(x: Int, y: String)
+case class B(a1: A, a2: A, y: String)
+case class C(a: A, b: B, c: A, d: B, e: B)
 
+class MacrosUnitTests extends WordSpec with Matchers {
   import MacroImplicits._
   def isMg[T](t: T): T = {
     t shouldBe a[MacroGenerated]
