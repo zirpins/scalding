@@ -207,6 +207,7 @@ object ScaldingBuild extends Build {
   val bijectionVersion = "0.6.3"
   val chillVersion = "0.4.0"
   val slf4jVersion = "1.6.6"
+  val storehausVersion = "0.9.1"
 
   lazy val scaldingCore = module("core").settings(
     libraryDependencies ++= Seq(
@@ -240,7 +241,10 @@ object ScaldingBuild extends Build {
       "org.slf4j" % "slf4j-api" % slf4jVersion,
       "org.slf4j" % "slf4j-log4j12" % slf4jVersion % "provided",
       "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
-      "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"
+      "org.scala-tools.testing" %% "specs" % "1.6.9" % "test",
+      "com.twitter" %% "storehaus-core" % storehausVersion,
+      "com.twitter" %% "storehaus-cascading" % storehausVersion exclude("org.slf4j", "slf4j-api"),
+      "com.twitter" %% "storehaus-cassandra" % storehausVersion  exclude("org.slf4j", "slf4j-api")
     )
   ).dependsOn(scaldingArgs, scaldingDate, scaldingCore)
 
