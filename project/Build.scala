@@ -53,6 +53,10 @@ object ScaldingBuild extends Build {
 
     javaOptions in Test ++= Seq("-Xmx2048m", "-XX:ReservedCodeCacheSize=384m", "-XX:MaxPermSize=384m"),
 
+    // Uncomment to enable debugging
+    //javaOptions in Test += "-Xdebug",
+    //javaOptions in Test += "-Xrunjdwp:transport=dt_socket,server=y,suspend=y,address=5001",
+
     concurrentRestrictions in Global := Seq(
       Tags.limitAll(1)
     ),
