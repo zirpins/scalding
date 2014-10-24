@@ -14,25 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package com.twitter.scalding.commons.source.storehaus.cassandra
+package com.twitter.scalding.commons.source.storehaus
 
 import org.specs.Specification
 import org.specs.mock.Mockito
-import org.mockito.Matchers._
-
-import org.apache.hadoop.conf.Configuration
-import com.twitter.scalding._
-
 import com.twitter.storehaus.cascading.StorehausCascadingInitializer
-import com.twitter.storehaus.cascading.StorehausTap
 import com.twitter.storehaus.cascading.versioned.VersionedStorehausCascadingInitializer
-import com.twitter.storehaus.cascading.versioned.VersionedStorehausTap
+import StorehausSourcesSpec.mode
 
 object StorehausSourcesSpec {
   implicit val mode = new com.twitter.scalding.Test(_ => None)
 }
-
-import StorehausSourcesSpec.mode
 
 class StorehausMappableSpec extends Specification with Mockito {
   val init = mock[StorehausCascadingInitializer[String, String]]

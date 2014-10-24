@@ -14,17 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package com.twitter.scalding.commons.source.storehaus.cassandra
+package com.twitter.scalding.commons.source.storehaus
 
-import com.twitter.scalding.AccessMode
-import com.twitter.scalding.Mode
-import com.twitter.scalding.Source
-import com.twitter.scalding.TupleConverter
-import com.twitter.storehaus.cascading.StorehausCascadingInitializer
-import com.twitter.storehaus.cascading.StorehausTap
-import com.twitter.storehaus.cascading.versioned._
+import com.twitter.scalding.{ AccessMode, Mode, Source, TupleConverter, Mappable }
+import com.twitter.storehaus.cascading.{ StorehausCascadingInitializer, StorehausTap }
+import com.twitter.storehaus.cascading.versioned.{ VersionedStorehausCascadingInitializer, VersionedStorehausTap }
 import cascading.tap.Tap
-import com.twitter.scalding.Mappable
 
 /**
  * Generic typed & mappable source/sink for any storehaus store.

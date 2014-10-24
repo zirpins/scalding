@@ -14,13 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package com.twitter.scalding.commons.source.storehaus.cassandra
-
-import org.apache.hadoop.io.Writable
-import com.twitter.storehaus.cascading.split.SplittableStore
+package com.twitter.scalding.commons.source.storehaus
 import com.twitter.storehaus.cassandra.cql.CQLCassandraConfiguration.StoreColumnFamily
-import com.twitter.storehaus.ReadableStore
-import com.twitter.storehaus.WritableStore
 import com.twitter.storehaus.Store
 
 /**

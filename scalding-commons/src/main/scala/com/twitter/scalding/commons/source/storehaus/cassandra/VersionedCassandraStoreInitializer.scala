@@ -21,13 +21,11 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.io.Writable
 import com.twitter.util.Await
 import com.twitter.storehaus.{ ReadableStore, WritableStore }
-import com.twitter.storehaus.cascading.StorehausCascadingInitializer
 import com.twitter.storehaus.cassandra.cql.CQLCassandraStore
 import com.twitter.storehaus.cascading.versioned.VersionedStorehausCascadingInitializer
-import com.twitter.storehaus.cascading.split.StorehausSplittingMechanism
-import com.websudos.phantom.CassandraPrimitive
 import com.twitter.storehaus.IterableStore
 import com.twitter.storehaus.cassandra.cql.CQLCassandraConfiguration._
+import com.twitter.scalding.commons.source.storehaus.{ ManagedVersionedStore, ManagedCassandraStore }
 
 /**
  * Simple implementation of versioning for VersionedStoreCascadingInitializer

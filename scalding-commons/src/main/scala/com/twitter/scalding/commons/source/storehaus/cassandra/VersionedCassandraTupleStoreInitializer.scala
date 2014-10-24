@@ -26,9 +26,6 @@ import shapeless.TypeOperators._
 import shapeless.UnaryTCConstraint._
 import com.twitter.storehaus.cassandra.cql.cascading.CassandraCascadingRowMatcher
 
-object VersionedCassandraTupleStoreInitializer {
-}
-
 /**
  * Implementation of generic VersionedCassandraStoreInitializer
  * based on CassandraTupleStore backed by CQLCassandraCollectionStore.
