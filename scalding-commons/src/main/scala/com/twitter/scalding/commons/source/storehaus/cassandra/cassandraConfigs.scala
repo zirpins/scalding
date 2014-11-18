@@ -29,7 +29,7 @@ trait CassandraConfig {
    */
   def getCFBaseName = "versionedtable";
 
-  def getStoreSession : StoreSession;
+  def getStoreSession: StoreSession;
 
 }
 
@@ -38,11 +38,11 @@ trait CassandraConfig {
  */
 trait CassandraTupleStoreConfig[RKT <: Product, CKT <: Product, ValueT] {
 
-  def getThriftConnections : String;
+  def getThriftConnections: String;
 
-  def colkeyColumnNames : List[String];
+  def colkeyColumnNames: List[String];
 
-  def rowkeyColumnNames : List[String];
+  def rowkeyColumnNames: List[String];
 
-  def valueSerializer : CassandraPrimitive[ValueT];
+  def valueSerializer: CassandraPrimitive[ValueT];
 }

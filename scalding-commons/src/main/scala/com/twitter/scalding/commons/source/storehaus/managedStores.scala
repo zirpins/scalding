@@ -38,7 +38,12 @@ trait ManagedVersionedStore {
    * return latest version in store before
    */
   def lastVersionBefore(version: Long): Option[Long];
-};
+
+  /**
+   * Shutdown the versioned store initializer
+   */
+  def close(): Unit;
+}
 
 /**
  * Generic abstraction of cassandra management functions for splittable stores
@@ -54,4 +59,4 @@ trait ManagedCassandraStore[KeyT, ValT] {
    *  some implementation to create store instances
    */
   def createStore(cf: StoreColumnFamily): Store[KeyT, ValT];
-};
+}

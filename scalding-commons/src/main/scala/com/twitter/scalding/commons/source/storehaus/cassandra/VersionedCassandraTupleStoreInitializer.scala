@@ -54,31 +54,33 @@ import com.twitter.storehaus.cassandra.cql.cascading.{
  * Splitting is done based on the native cassandra splitting mechanism.
  */
 abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Product, Value, RK <: HList, CK <: HList, RS <: HList, CS <: HList, MRKResult <: HList, MCKResult <: HList](
-  paramToPreventWritingDownTypes : (RKT, CKT),
-  valueColumnName : String = CQLCassandraConfiguration.DEFAULT_VALUE_COLUMN_NAME,
-  consistency : ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
-  poolSize : Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE)(
-    implicit ev1 : HListerAux[RKT, RK],
-    ev2 : HListerAux[CKT, CK],
-    ev3 : TuplerAux[RK, RKT],
-    ev4 : TuplerAux[CK, CKT],
-    evrow : MappedAux[RK, CassandraPrimitive, RS],
-    evcol : MappedAux[CK, CassandraPrimitive, CS],
-    rowmap : AbstractCQLCassandraCompositeStore.Row2Result[RK, RS],
-    colmap : AbstractCQLCassandraCompositeStore.Row2Result[CK, CS],
-    a2cRow : AbstractCQLCassandraCompositeStore.Append2Composite[ArrayBuffer[Clause], RK, RS],
-    a2cCol : AbstractCQLCassandraCompositeStore.Append2Composite[ArrayBuffer[Clause], CK, CS],
-    rsUTC : *->*[CassandraPrimitive]#λ[RS],
-    csUTC : *->*[CassandraPrimitive]#λ[CS],
-    map0 : MapperAux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, RK, RS],
-    map1 : MapperAux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, CK, CS],
-    mrk : MapperAux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, RS, MRKResult],
-    mck : MapperAux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, CS, MCKResult],
-    tork : ToList[MRKResult, String],
-    tock : ToList[MCKResult, String],
-    ev5 : CassandraPrimitive[Value],
-    mergeSemigroup : Semigroup[Set[Value]])
-  extends VersionedCassandraStoreInitializer[(RKT, CKT), Set[Value]]
+  identifier: String = DEFAULT_VERSIONSTORE_IDENTIFIER,
+  versionsToKeep: Int = DEFAULT_VERSIONS_TO_KEEP,
+  paramToPreventWritingDownTypes: (RKT, CKT),
+  valueColumnName: String = CQLCassandraConfiguration.DEFAULT_VALUE_COLUMN_NAME,
+  consistency: ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
+  poolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE)(
+    implicit ev1: HListerAux[RKT, RK],
+    ev2: HListerAux[CKT, CK],
+    ev3: TuplerAux[RK, RKT],
+    ev4: TuplerAux[CK, CKT],
+    evrow: MappedAux[RK, CassandraPrimitive, RS],
+    evcol: MappedAux[CK, CassandraPrimitive, CS],
+    rowmap: AbstractCQLCassandraCompositeStore.Row2Result[RK, RS],
+    colmap: AbstractCQLCassandraCompositeStore.Row2Result[CK, CS],
+    a2cRow: AbstractCQLCassandraCompositeStore.Append2Composite[ArrayBuffer[Clause], RK, RS],
+    a2cCol: AbstractCQLCassandraCompositeStore.Append2Composite[ArrayBuffer[Clause], CK, CS],
+    rsUTC: *->*[CassandraPrimitive]#λ[RS],
+    csUTC: *->*[CassandraPrimitive]#λ[CS],
+    map0: MapperAux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, RK, RS],
+    map1: MapperAux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, CK, CS],
+    mrk: MapperAux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, RS, MRKResult],
+    mck: MapperAux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, CS, MCKResult],
+    tork: ToList[MRKResult, String],
+    tock: ToList[MCKResult, String],
+    ev5: CassandraPrimitive[Value],
+    mergeSemigroup: Semigroup[Set[Value]])
+  extends VersionedCassandraStoreInitializer[(RKT, CKT), Set[Value]](identifier = identifier, versionsToKeep = versionsToKeep)
   with CassandraCascadingInitializer[(RKT, CKT), Set[Value]]
   with CassandraTupleStoreConfig[RKT, CKT, Value] {
 
@@ -100,14 +102,14 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   }
 
   // We use the native cassandra splitting mechanism (make sure to call this before planning)
-  def registerSplittableStoreSplittingMechanism(jobConf : JobConf) = {
+  def registerSplittableStoreSplittingMechanism(jobConf: JobConf) = {
     StorehausInputFormat.
       setSplittingClass[TupleStoreKeyT, TupleStoreValT, InitT, SplitterT](
         jobConf, classOf[SplitterT]);
   }
 
   // CF generator implementation
-  override def createColumnFamily(cf : StoreColumnFamily) : Unit = {
+  override def createColumnFamily(cf: StoreColumnFamily): Unit = {
     CQLCassandraCollectionStore.createColumnFamily(
       cf,
       rowkeySerializers,
@@ -120,11 +122,11 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   }
 
   // Store factory implementation
-  override def createStore(cf : StoreColumnFamily) : Store[TupleStoreKeyT, TupleStoreValT] = {
+  override def createStore(cf: StoreColumnFamily): Store[TupleStoreKeyT, TupleStoreValT] = {
     createTupleStore(cf);
   }
 
-  private def createTupleStore(cf : StoreColumnFamily) = {
+  private def createTupleStore(cf: StoreColumnFamily) = {
     new StoreT(
       new CQLCassandraCollectionStore(
         cf,
@@ -140,19 +142,19 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
         CQLCassandraConfiguration.DEFAULT_SYNC), paramToPreventWritingDownTypes);
   }
 
-  def getCascadingRowMatcher : CassandraCascadingRowMatcher[(RKT, CKT), Set[Value]] = {
+  def getCascadingRowMatcher: CassandraCascadingRowMatcher[(RKT, CKT), Set[Value]] = {
     createTupleStore(getCf(-1));
   }
 
-  def getColumnFamilyName(version : Option[Long]) : String = {
+  def getColumnFamilyName(version: Option[Long]): String = {
     version match {
       case Some(ver) => getCf(ver).getName;
       case None => throw new RuntimeException("Error retrieving CF name with None version");
     }
   }
 
-  def getKeyspaceName : String = { getStoreSession.getKeyspacename }
+  def getKeyspaceName: String = { getStoreSession.getKeyspacename }
 
-  def valueSerializer : CassandraPrimitive[Value] = { ev5 }
+  def valueSerializer: CassandraPrimitive[Value] = { ev5 }
 
 }

@@ -21,7 +21,10 @@ import com.twitter.storehaus.Store
 package object cassandra {
 
   // Default number of versions to keep in version store   
-  def DefaultVersionsToKeep: Int = 3;
+  val DEFAULT_VERSIONS_TO_KEEP = 3;
+
+  // default name suffix for single versioned stores
+  val DEFAULT_VERSIONSTORE_IDENTIFIER = "single";
 
   // Minimum type of the internal versionedCassandraStore meta store
   type MetaStoreT = Store[Long, Boolean] with IterableStore[Long, Boolean];

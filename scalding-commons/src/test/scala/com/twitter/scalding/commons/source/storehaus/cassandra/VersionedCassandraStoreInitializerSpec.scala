@@ -51,7 +51,7 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
    * Mock Initializer implementation
    */
   class TestInitilizer(metaStore: MetaStoreT) extends VersionedCassandraStoreInitializer[String, String](
-    3, Some(metaStore)) {
+    identifier = "test", versionsToKeep = 3, metaStore = Some(metaStore)) {
     val storeSessionMock = mock[StoreSession]
     val storeMock = mock[Store[String, String]]
 

@@ -26,12 +26,12 @@ import cascading.tap.Tap
  * - can be sent over the wire and thus can be used in mappers/reducers
  */
 case class StorehausMappable[K, V](
-  @transient storehausInit : StorehausCascadingInitializer[K, V])(
-    implicit conv : TupleConverter[(K, V)]) extends Source with Mappable[(K, V)] {
+  @transient storehausInit: StorehausCascadingInitializer[K, V])(
+    implicit conv: TupleConverter[(K, V)]) extends Source with Mappable[(K, V)] {
 
   override def converter[U >: (K, V)] = { TupleConverter.asSuperConverter[(K, V), U](conv) }
 
-  override def createTap(readOrWrite : AccessMode)(implicit mode : Mode) : Tap[_, _, _] = {
+  override def createTap(readOrWrite: AccessMode)(implicit mode: Mode): Tap[_, _, _] = {
     new StorehausTap(storehausInit);
   }
 }
@@ -42,12 +42,12 @@ case class StorehausMappable[K, V](
  * - multiple versions of the data can be referenced
  */
 case class StorehausVersionedMappable[K, V, Q <: VersionedStorehausCascadingInitializer[K, V]](
-  @transient storehausInit : Q, version : Long)(
-    implicit conv : TupleConverter[(K, V)]) extends Source with Mappable[(K, V)] {
+  @transient storehausInit: Q, version: Long)(
+    implicit conv: TupleConverter[(K, V)]) extends Source with Mappable[(K, V)] {
 
   override def converter[U >: (K, V)] = { TupleConverter.asSuperConverter[(K, V), U](conv) }
 
-  override def createTap(readOrWrite : AccessMode)(implicit mode : Mode) : Tap[_, _, _] = {
+  override def createTap(readOrWrite: AccessMode)(implicit mode: Mode): Tap[_, _, _] = {
     new VersionedStorehausTap(storehausInit, version);
   }
 }
