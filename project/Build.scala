@@ -247,6 +247,7 @@ object ScaldingBuild extends Build {
       "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
       "org.scala-tools.testing" %% "specs" % "1.6.9" % "test",
       "com.twitter" %% "storehaus-core" % storehausVersion,
+      "com.twitter" %% "storehaus-algebra" % storehausVersion,
       "com.twitter" %% "storehaus-cascading" % storehausVersion exclude("org.slf4j", "slf4j-api"),
       "com.twitter" %% "storehaus-cassandra" % storehausVersion  exclude("org.slf4j", "slf4j-api")
     )
