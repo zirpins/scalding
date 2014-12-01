@@ -14,6 +14,16 @@ import scala.collection.JavaConverters._
 object ScaldingBuild extends Build {
   val printDependencyClasspath = taskKey[Unit]("Prints location of the dependencies")
 
+  def real210Version(dep: ModuleID) = dep cross CrossVersion.binaryMapped {
+    case version if version startsWith "2.10" => "2.10.3"
+    case x => x
+  }
+
+  def isScala210x(scalaVersion: String) = scalaVersion match {
+    case version if version startsWith "2.9" => false
+    case version if version startsWith "2.10" => true
+  }
+
   val sharedSettings = Project.defaultSettings ++ assemblySettings ++ scalariformSettings ++ Seq(
     organization := "com.twitter",
 
@@ -165,6 +175,7 @@ object ScaldingBuild extends Build {
     scaldingJson,
     scaldingJdbc,
     scaldingHadoopTest,
+    scaldingStorehaus,
     maple
   )
 
@@ -245,11 +256,7 @@ object ScaldingBuild extends Build {
       "org.slf4j" % "slf4j-api" % slf4jVersion,
       "org.slf4j" % "slf4j-log4j12" % slf4jVersion % "provided",
       "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
-      "org.scala-tools.testing" %% "specs" % "1.6.9" % "test",
-      "com.twitter" %% "storehaus-core" % storehausVersion,
-      "com.twitter" %% "storehaus-algebra" % storehausVersion,
-      "com.twitter" %% "storehaus-cascading" % storehausVersion exclude("org.slf4j", "slf4j-api"),
-      "com.twitter" %% "storehaus-cassandra" % storehausVersion  exclude("org.slf4j", "slf4j-api")
+      "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"
     )
   ).dependsOn(scaldingArgs, scaldingDate, scaldingCore)
 
@@ -348,6 +355,20 @@ object ScaldingBuild extends Build {
     )
     }
   ).dependsOn(scaldingCore)
+
+  lazy val scaldingStorehaus = module("storehaus").settings(
+    skip in test := !isScala210x(scalaVersion.value),
+    skip in compile := !isScala210x(scalaVersion.value),
+    skip in doc := !isScala210x(scalaVersion.value),
+    publishArtifact := isScala210x(scalaVersion.value),
+    libraryDependencies ++= (if (!isScala210x(scalaVersion.value)) Seq() else Seq(
+      real210Version("com.chuusai" %% "shapeless" % "2.0.0"),
+      "com.twitter" %% "storehaus-core" % storehausVersion,
+      "com.twitter" %% "storehaus-algebra" % storehausVersion,
+      "com.twitter" %% "storehaus-cascading" % storehausVersion exclude("org.slf4j", "slf4j-api"),
+      "com.twitter" %% "storehaus-cassandra" % storehausVersion exclude("org.slf4j", "slf4j-api")
+    ))
+  ).dependsOn(scaldingCommons)
 
   // This one uses a different naming convention
   lazy val maple = Project(

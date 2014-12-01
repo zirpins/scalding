@@ -19,8 +19,7 @@ package com.twitter.scalding.commons.source.storehaus.cassandra
 import scala.collection.mutable.ArrayBuffer
 import org.slf4j.LoggerFactory
 import shapeless._
-import shapeless.Tuples._
-import shapeless.TypeOperators._
+import shapeless.ops.hlist._
 import shapeless.UnaryTCConstraint._
 import com.websudos.phantom.CassandraPrimitive
 import com.datastax.driver.core.BatchStatement
@@ -40,6 +39,7 @@ import com.twitter.storehaus.cassandra.cql.{
   CQLCassandraConfiguration,
   CassandraTupleStore
 }
+import com.twitter.storehaus.cassandra.cql.macrobug._
 import CQLCassandraConfiguration._
 import AbstractCQLCassandraCompositeStore._
 import com.twitter.storehaus.cassandra.cql.cascading.{
@@ -62,20 +62,20 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   poolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE)(
     implicit ev1: HListerAux[RKT, RK],
     ev2: HListerAux[CKT, CK],
-    ev3: TuplerAux[RK, RKT],
-    ev4: TuplerAux[CK, CKT],
-    evrow: MappedAux[RK, CassandraPrimitive, RS],
-    evcol: MappedAux[CK, CassandraPrimitive, CS],
+    ev3: Tupler.Aux[RK, RKT],
+    ev4: Tupler.Aux[CK, CKT],
+    evrow: Mapped.Aux[RK, CassandraPrimitive, RS],
+    evcol: Mapped.Aux[CK, CassandraPrimitive, CS],
     rowmap: AbstractCQLCassandraCompositeStore.Row2Result[RK, RS],
     colmap: AbstractCQLCassandraCompositeStore.Row2Result[CK, CS],
     a2cRow: AbstractCQLCassandraCompositeStore.Append2Composite[ArrayBuffer[Clause], RK, RS],
     a2cCol: AbstractCQLCassandraCompositeStore.Append2Composite[ArrayBuffer[Clause], CK, CS],
     rsUTC: *->*[CassandraPrimitive]#λ[RS],
     csUTC: *->*[CassandraPrimitive]#λ[CS],
-    map0: MapperAux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, RK, RS],
-    map1: MapperAux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, CK, CS],
-    mrk: MapperAux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, RS, MRKResult],
-    mck: MapperAux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, CS, MCKResult],
+    map0: Mapper.Aux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, RK, RS],
+    map1: Mapper.Aux[AbstractCQLCassandraCompositeStore.cassandraSerializerCreation.type, CK, CS],
+    mrk: Mapper.Aux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, RS, MRKResult],
+    mck: Mapper.Aux[AbstractCQLCassandraCompositeStore.keyStringMapping.type, CS, MCKResult],
     tork: ToList[MRKResult, String],
     tock: ToList[MCKResult, String],
     ev5: CassandraPrimitive[Value],
@@ -95,10 +95,10 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
 
   // Look up serializers
   def rowkeySerializers = {
-    getSerializerHListByExample(paramToPreventWritingDownTypes._1.hlisted);
+    getSerializerHListByExample(ev1(paramToPreventWritingDownTypes._1));
   }
   def colkeySerializers = {
-    getSerializerHListByExample(paramToPreventWritingDownTypes._2.hlisted);
+    getSerializerHListByExample(ev2(paramToPreventWritingDownTypes._2));
   }
 
   // We use the native cassandra splitting mechanism (make sure to call this before planning)
