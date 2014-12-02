@@ -16,7 +16,6 @@ limitations under the License.
 
 package com.twitter.scalding.commons.source.storehaus
 
-import com.twitter.storehaus.cassandra.cql.CQLCassandraConfiguration.StoreColumnFamily
 import com.twitter.storehaus.Store
 
 /**
@@ -43,20 +42,4 @@ trait ManagedVersionedStore {
    * Shutdown the versioned store initializer
    */
   def close(): Unit;
-}
-
-/**
- * Generic abstraction of cassandra management functions for splittable stores
- */
-trait ManagedCassandraStore[KeyT, ValT] {
-
-  /**
-   *  some implementation to create store specific column families
-   */
-  def createColumnFamily(cf: StoreColumnFamily): Unit;
-
-  /**
-   *  some implementation to create store instances
-   */
-  def createStore(cf: StoreColumnFamily): Store[KeyT, ValT];
 }
