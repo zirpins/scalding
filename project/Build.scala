@@ -8,11 +8,22 @@ import com.typesafe.tools.mima.plugin.MimaPlugin.mimaDefaultSettings
 import com.typesafe.tools.mima.plugin.MimaKeys._
 import scalariform.formatter.preferences._
 import com.typesafe.sbt.SbtScalariform._
+import java.util.regex.Pattern
 
 import scala.collection.JavaConverters._
 
 object ScaldingBuild extends Build {
   val printDependencyClasspath = taskKey[Unit]("Prints location of the dependencies")
+
+  def real210Version(dep: ModuleID) = dep cross CrossVersion.binaryMapped {
+    case version if version startsWith "2.10" => "2.10.3"
+    case x => x
+  }
+
+  def isScala210xPlus(scalaVersion: String) = scalaVersion match {
+    case version if version startsWith "2.9" => false
+    case version if version startsWith "2.1" => true
+  }
 
   val sharedSettings = Project.defaultSettings ++ assemblySettings ++ scalariformSettings ++ Seq(
     organization := "com.twitter",
@@ -229,8 +240,8 @@ object ScaldingBuild extends Build {
     )
   ).dependsOn(scaldingArgs, scaldingDate, maple)
 
-  lazy val scaldingCommons = module("commons").settings(
-    libraryDependencies ++= Seq(
+  def scaldingCommonsDependencies(scalaVersion: String) = {
+    val deps = Seq(
       "com.backtype" % "dfs-datastores-cascading" % "1.3.4",
       "com.backtype" % "dfs-datastores" % "1.3.4",
       // TODO: split into scalding-protobuf
@@ -245,11 +256,27 @@ object ScaldingBuild extends Build {
       "org.slf4j" % "slf4j-api" % slf4jVersion,
       "org.slf4j" % "slf4j-log4j12" % slf4jVersion % "provided",
       "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
-      "org.scala-tools.testing" %% "specs" % "1.6.9" % "test",
+      "org.scala-tools.testing" %% "specs" % "1.6.9" % "test"
+    )
+    if(isScala210xPlus(scalaVersion)) deps ++ Seq(
       "com.twitter" %% "storehaus-core" % storehausVersion,
       "com.twitter" %% "storehaus-cascading" % storehausVersion exclude("org.slf4j", "slf4j-api"),
-      "com.twitter" %% "storehaus-cassandra" % storehausVersion  exclude("org.slf4j", "slf4j-api")
-    )
+      "com.twitter" %% "storehaus-algebra" % storehausVersion,
+      real210Version("com.chuusai" %% "shapeless" % "2.0.0"),
+      "com.twitter" %% "storehaus-cassandra" % storehausVersion exclude("org.slf4j", "slf4j-api")
+    ) else deps
+  }
+
+  def scaldingCommonsExcludes(scalaVersion: String) = if(isScala210xPlus(scalaVersion)) {
+    HiddenFileFilter
+  } else {
+    // exclude storehaus-sources with 2.10 dependencies if 2.9.3
+    HiddenFileFilter || "storehaus"
+  }
+
+  lazy val scaldingCommons = module("commons").settings(
+    libraryDependencies ++= scaldingCommonsDependencies(scalaVersion.value),
+    excludeFilter in unmanagedSources := scaldingCommonsExcludes(scalaVersion.value)
   ).dependsOn(scaldingArgs, scaldingDate, scaldingCore)
 
   lazy val scaldingAvro = module("avro").settings(
