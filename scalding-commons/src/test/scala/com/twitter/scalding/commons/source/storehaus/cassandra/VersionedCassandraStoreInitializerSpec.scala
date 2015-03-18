@@ -42,16 +42,17 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
           map { t: (K, Option[V]) => (t._1, t._2.get) }.iterator)
   }
 
+  
   /**
-   * MetaStoreT in-memory implementation
+   * MetaStoreUnderlyingT in-memory implementation
    */
   class MetaStoreImpl extends IterableJMapStore[Long, Boolean]()
 
   /**
    * Mock Initializer implementation
    */
-  class TestInitilizer(metaStore: MetaStoreT) extends VersionedCassandraStoreInitializer[String, String](
-    identifier = "test", versionsToKeep = 3, metaStore = Some(metaStore)) {
+  class TestInitilizer(metaStore: MetaStoreUnderlyingT) extends VersionedCassandraStoreInitializer[String, String](
+    identifier = "test", versionsToKeep = 3, metaStoreUnderlying = Some(metaStore)) {
     val storeSessionMock = mock[StoreSession]
     val storeMock = mock[Store[String, String]]
 

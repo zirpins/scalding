@@ -39,123 +39,40 @@ import com.twitter.util.Time
 abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
   val identifier: String = DEFAULT_VERSIONSTORE_IDENTIFIER,
   val versionsToKeep: Int = DEFAULT_VERSIONS_TO_KEEP,
-  private val metaStore: Option[MetaStoreT] = None)
+  val metaStoreUnderlying: Option[MetaStoreUnderlyingT] = None)
   extends VersionedStorehausCascadingInitializer[KeyT, ValT]
   with ManagedVersionedStore
   with ManagedCassandraStore[KeyT, ValT]
   with CassandraConfig {
 
   @transient private val logger = LoggerFactory.getLogger(
-    classOf[VersionedCassandraStoreInitializer[KeyT, ValT]]);
+    classOf[VersionedCassandraStoreInitializer[KeyT, ValT]])
 
-  // suffix for meta store column family name
-  val METATSTORE_CF_SUFFIX = "versions";
-
-  /**
-   * Meta store for version housekeeping
-   */
-  private object MetaStore {
-
-    // cassandra column family of default embedded store
-    @transient private lazy val metaStoreCF: Option[StoreColumnFamily] = metaStore match {
-      case Some(_) => None;
-      case None => Some(StoreColumnFamily(identifier + METATSTORE_CF_SUFFIX, getStoreSession));
-    }
-
-    // embedded store defaults to CQLCassandraStore
-    @transient private lazy val store: MetaStoreT = metaStore match {
-      case Some(store) => store;
-      case None => {
-        assert(metaStoreCF.nonEmpty);
-        CQLCassandraStore.createColumnFamily[Long, Boolean](metaStoreCF.get);
-        new CQLCassandraStore[Long, Boolean](metaStoreCF.get);
-      }
-    }
-
-    /**
-     * close meta store
-     */
-    def close(deadline: Time): Unit = {
-      store.close(deadline)
-    }
-
-    /**
-     * mark version as valid
-     */
-    def validate(version: Long): Unit = {
-      store.put(version, Some(true))
-    }
-
-    /**
-     * mark version as invalid
-     */
-    def invalidate(version: Long): Unit = {
-      store.put(version, Some(false))
-    }
-
-    /**
-     * remove version from store
-     *
-     * Not yet implemented
-     */
-    def remove(version: Long): Unit = { ??? }
-
-    /*
-     * read all version info
-     */
-    private def readAll: Seq[(Long, Boolean)] = {
-      Await.result(Await.result(store getAll).toSeq)
-    }
-
-    /**
-     * return all versions
-     */
-    def allVersTuples: Seq[(Long, Boolean)] = { readAll }
-
-    /**
-     * return all versions marked as valid
-     */
-    def vers: Seq[Long] = { allVersTuples.filter { a => a._2 }.map { _._1 } }
-
-    /**
-     * count valid versions
-     */
-    def numVers: Long = { vers.count { _ => true } }
-
-    /**
-     * check validity of version
-     */
-    def hasVer(ver: Long): Boolean = { vers.count { _.equals(ver) } == 1 }
-
-    /**
-     * return latest valid version
-     */
-    def latestVer: Long = {
-      val v = vers;
-      if (v.isEmpty) -1 else v.sorted.last;
-    }
+  val metaStore = metaStoreUnderlying match {
+    case Some(store) => new CassandraVersionMetaStore(store)
+    case None => CassandraVersionMetaStore(identifier, getStoreSession)
   }
 
   /**
    * Shutdown the versioned store initializer
    */
-  override def close = { MetaStore.close(Time.now) }
+  override def close = { metaStore.close(Time.now) }
 
   /**
    * Meta store operation implementing {@link ManagedVersionedStore.lastVersion}
    */
-  override def lastVersion(): Long = { MetaStore.latestVer }
+  override def lastVersion(): Long = { metaStore.latestVer }
 
   /**
    * Meta store operation implementing {@link ManagedVersionedStore.versions}
    */
-  override def versions(): Iterable[Long] = { MetaStore.vers }
+  override def versions(): Iterable[Long] = { metaStore.vers }
 
   /**
    * Meta store operation implementing {@link ManagedVersionedStore.lastVersionBefore}
    */
   override def lastVersionBefore(version: Long): Option[Long] = {
-    MetaStore.vers.filter { _ < version }.reduceOption { (a, b) => if (a < b) b else a };
+    metaStore.vers.filter { _ < version }.reduceOption { (a, b) => if (a < b) b else a };
   }
 
   /**
@@ -177,7 +94,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
     // getCf(version).dropAndDeleteColumnFamilyAndContainedData
 
     // invalidate version
-    MetaStore.invalidate(version);
+    metaStore.invalidate(version);
   }
 
   /**
@@ -190,7 +107,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
     createColumnFamily(getCf(version));
 
     // register version
-    MetaStore.validate(version);
+    metaStore.validate(version);
     true;
   }
 
@@ -198,7 +115,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
    * Retrieves some readable store for a version if existing, otherwise returns none.
    */
   override def getReadableStore(jobConf: JobConf, version: Long): Option[ReadableStore[KeyT, ValT]] = {
-    MetaStore.hasVer(version) match {
+    metaStore.hasVer(version) match {
       case true => {
         Some(createStore(getCf(version)).asInstanceOf[ReadableStore[KeyT, ValT]]);
       }
@@ -220,18 +137,18 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
    * the last existing version will be dropped.
    */
   override def getWritableStore(jobConf: JobConf, version: Long): Option[WritableStore[KeyT, Option[ValT]]] = {
-    MetaStore.hasVer(version) match {
+    metaStore.hasVer(version) match {
       case true => {
         Some(getWritableStoreOnce(version));
       }
       case false => {
         // make sure new version is ahead
-        if (MetaStore.latestVer > version) {
+        if (metaStore.latestVer > version) {
           logger.error(s"Tried to retrieve outdated non-existing version store '$version' for writing.");
           return None;
         }
         // drop oldest version if max number is reached
-        if (!((versionsToKeep - MetaStore.numVers) > 0)) dropStore(MetaStore.vers.sorted.head);
+        if (!((versionsToKeep - metaStore.numVers) > 0)) dropStore(metaStore.vers.sorted.head);
         // create new version store
         if (prepareStore(version)) Some(getWritableStoreOnce(version)) else None;
       }

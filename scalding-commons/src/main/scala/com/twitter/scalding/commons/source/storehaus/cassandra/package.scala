@@ -20,6 +20,9 @@ import com.twitter.storehaus.Store
 
 package object cassandra {
 
+  // suffix for version meta store column family name
+  val METATSTORE_CF_SUFFIX = "versions";
+
   // Default number of versions to keep in version store   
   val DEFAULT_VERSIONS_TO_KEEP = 3;
 
@@ -27,5 +30,5 @@ package object cassandra {
   val DEFAULT_VERSIONSTORE_IDENTIFIER = "single";
 
   // Minimum type of the internal versionedCassandraStore meta store
-  type MetaStoreT = Store[Long, Boolean] with IterableStore[Long, Boolean];
+  type MetaStoreUnderlyingT = Store[Long, Boolean] with IterableStore[Long, Boolean];
 }

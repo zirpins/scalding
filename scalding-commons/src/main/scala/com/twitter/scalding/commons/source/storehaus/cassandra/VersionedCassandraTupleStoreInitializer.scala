@@ -59,7 +59,8 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   paramToPreventWritingDownTypes: (RKT, CKT),
   valueColumnName: String = CQLCassandraConfiguration.DEFAULT_VALUE_COLUMN_NAME,
   consistency: ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
-  poolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE)(
+  poolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE,
+  metaStoreUnderlying: Option[MetaStoreUnderlyingT] = None)(
     implicit ev1: HListerAux[RKT, RK],
     ev2: HListerAux[CKT, CK],
     ev3: Tupler.Aux[RK, RKT],
@@ -80,7 +81,7 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
     tock: ToList[MCKResult, String],
     ev5: CassandraPrimitive[Value],
     mergeSemigroup: Semigroup[Set[Value]])
-  extends VersionedCassandraStoreInitializer[(RKT, CKT), Set[Value]](identifier = identifier, versionsToKeep = versionsToKeep)
+  extends VersionedCassandraStoreInitializer[(RKT, CKT), Set[Value]](identifier = identifier, versionsToKeep = versionsToKeep, metaStoreUnderlying = metaStoreUnderlying)
   with CassandraCascadingInitializer[(RKT, CKT), Set[Value]]
   with CassandraTupleStoreConfig[RKT, CKT, Value] {
 
