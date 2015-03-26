@@ -26,6 +26,7 @@ import com.twitter.storehaus.JMapStore
 import com.twitter.util.Future
 import com.twitter.concurrent.Spool
 import org.apache.hadoop.mapred.JobConf
+import com.datastax.driver.core.ConsistencyLevel
 
 /**
  * Specification of the VersionedCassandraStoreInitializer
@@ -42,7 +43,6 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
           map { t: (K, Option[V]) => (t._1, t._2.get) }.iterator)
   }
 
-  
   /**
    * MetaStoreUnderlyingT in-memory implementation
    */
@@ -58,7 +58,8 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
 
     override def getStoreSession: StoreSession = storeSessionMock
     override def createColumnFamily(cf: StoreColumnFamily): Unit = { /* ignored */ }
-    override def createStore(cf: StoreColumnFamily): Store[String, String] = storeMock
+    override def createReadableStore(cf: StoreColumnFamily): Store[String, String] = storeMock
+    override def createWritableStore(cf: StoreColumnFamily): Store[String, String] = storeMock
   }
 
   val jobConfMock = mock[JobConf]

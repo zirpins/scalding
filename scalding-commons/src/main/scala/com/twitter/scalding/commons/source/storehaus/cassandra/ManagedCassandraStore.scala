@@ -30,7 +30,12 @@ trait ManagedCassandraStore[KeyT, ValT] {
   def createColumnFamily(cf: StoreColumnFamily): Unit;
 
   /**
-   *  some implementation to create store instances
+   *  some implementation to create store instances for reading
    */
-  def createStore(cf: StoreColumnFamily): Store[KeyT, ValT];
+  def createReadableStore(cf: StoreColumnFamily): Store[KeyT, ValT];
+
+  /**
+   *  some implementation to create store instances for writing
+   */
+  def createWritableStore(cf: StoreColumnFamily): Store[KeyT, ValT];
 }

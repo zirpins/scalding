@@ -23,14 +23,12 @@ import com.websudos.phantom.CassandraPrimitive
  * Simple abstraction of local cassandra config params
  */
 trait CassandraConfig {
-
   /**
    * Column family base name.
    */
   def getCFBaseName = "versionedtable";
 
   def getStoreSession: StoreSession;
-
 }
 
 /**

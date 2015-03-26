@@ -90,8 +90,8 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
   private def dropStore(version: Long): Unit = {
     logger.debug("Dropping outdated version store '{}'.", version);
 
-    // delete column family (unused)
-    // getCf(version).dropAndDeleteColumnFamilyAndContainedData
+    // delete column family
+    getCf(version).dropAndDeleteColumnFamilyAndContainedData
 
     // invalidate version
     metaStore.invalidate(version);
@@ -117,7 +117,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
   override def getReadableStore(jobConf: JobConf, version: Long): Option[ReadableStore[KeyT, ValT]] = {
     metaStore.hasVer(version) match {
       case true => {
-        Some(createStore(getCf(version)).asInstanceOf[ReadableStore[KeyT, ValT]]);
+        Some(createReadableStore(getCf(version)).asInstanceOf[ReadableStore[KeyT, ValT]]);
       }
       case false => {
         logger.error("Tried to retrieve non-existing version store for reading.");
@@ -128,7 +128,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
 
   // create specific store instance
   private def getWritableStoreOnce(version: Long): WritableStore[KeyT, Option[ValT]] = {
-    createStore(getCf(version)).asInstanceOf[WritableStore[KeyT, Option[ValT]]];
+    createWritableStore(getCf(version)).asInstanceOf[WritableStore[KeyT, Option[ValT]]];
   };
 
   /**

@@ -58,8 +58,10 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   versionsToKeep: Int = DEFAULT_VERSIONS_TO_KEEP,
   paramToPreventWritingDownTypes: (RKT, CKT),
   valueColumnName: String = CQLCassandraConfiguration.DEFAULT_VALUE_COLUMN_NAME,
-  consistency: ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
-  poolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE,
+  readConsistency: ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
+  writeConsistency: ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
+  readPoolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE,
+  writePoolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE,
   metaStoreUnderlying: Option[MetaStoreUnderlyingT] = None)(
     implicit ev1: HListerAux[RKT, RK],
     ev2: HListerAux[CKT, CK],
@@ -123,11 +125,19 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   }
 
   // Store factory implementation
-  override def createStore(cf: StoreColumnFamily): Store[TupleStoreKeyT, TupleStoreValT] = {
-    createTupleStore(cf);
+  override def createReadableStore(cf: StoreColumnFamily): Store[TupleStoreKeyT, TupleStoreValT] = {
+    createTupleStore(cf, readConsistency, readPoolSize);
   }
 
-  private def createTupleStore(cf: StoreColumnFamily) = {
+  // Store factory implementation
+  override def createWritableStore(cf: StoreColumnFamily): Store[TupleStoreKeyT, TupleStoreValT] = {
+    createTupleStore(cf, writeConsistency, writePoolSize);
+  }
+
+  private def createTupleStore(
+    cf: StoreColumnFamily,
+    consistency: ConsistencyLevel = CQLCassandraConfiguration.DEFAULT_CONSISTENCY_LEVEL,
+    poolSize: Int = CQLCassandraConfiguration.DEFAULT_FUTURE_POOL_SIZE) = {
     new StoreT(
       new CQLCassandraCollectionStore(
         cf,
@@ -144,7 +154,7 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   }
 
   def getCascadingRowMatcher: CassandraCascadingRowMatcher[(RKT, CKT), Set[Value]] = {
-    createTupleStore(getCf(-1));
+    createTupleStore(getCf(-1), readConsistency, readPoolSize);
   }
 
   def getColumnFamilyName(version: Option[Long]): String = {
