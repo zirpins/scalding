@@ -112,7 +112,7 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
   }
 
   // CF generator implementation
-  override def createColumnFamily(cf: StoreColumnFamily): Unit = {
+  def createColumnFamily(cf: StoreColumnFamily, tablecomment: Option[String]): Unit = {
     CQLCassandraCollectionStore.createColumnFamily(
       cf,
       rowkeySerializers,
@@ -121,7 +121,8 @@ abstract class VersionedCassandraTupleStoreInitializer[RKT <: Product, CKT <: Pr
       colkeyColumnNames,
       ev5,
       Set[Value](),
-      valueColumnName);
+      valueColumnName,
+      tablecomment);
   }
 
   // Store factory implementation
