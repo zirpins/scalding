@@ -16,17 +16,19 @@ limitations under the License.
 
 package com.twitter.scalding.commons.source.storehaus.cassandra
 
-import org.slf4j.LoggerFactory
-import org.apache.hadoop.mapred.JobConf
-import org.apache.hadoop.io.Writable
-import com.twitter.util.Await
-import com.twitter.storehaus.{ ReadableStore, WritableStore }
-import com.twitter.storehaus.cassandra.cql.CQLCassandraStore
-import com.twitter.storehaus.cascading.versioned.VersionedStorehausCascadingInitializer
+import com.twitter.scalding.commons.source.storehaus.ManagedCassandraStore
+import com.twitter.scalding.commons.source.storehaus.ManagedVersionedStore
 import com.twitter.storehaus.IterableStore
+import com.twitter.storehaus.WritableStore
+import com.twitter.storehaus.cascading.versioned.VersionedStorehausCascadingInitializer
+import com.twitter.storehaus.cassandra.cql.CASStore
 import com.twitter.storehaus.cassandra.cql.CQLCassandraConfiguration._
-import com.twitter.scalding.commons.source.storehaus.{ ManagedVersionedStore, ManagedCassandraStore }
+import com.twitter.storehaus.cassandra.cql.CQLCassandraStore
+import com.twitter.storehaus.cassandra.cql.CassandraCASStore
+import com.twitter.storehaus.cassandra.cql.TokenFactory.longTokenFactory
+import com.twitter.util.Await
 import com.twitter.util.Time
+import com.websudos.phantom.CassandraPrimitive
 
 /**
  * Default cassandra version meta store based on a simple underlying
@@ -34,10 +36,21 @@ import com.twitter.util.Time
 object CassandraVersionMetaStore {
   def apply(versionstoreId: String, storeSession: StoreSession): CassandraVersionMetaStore = {
     val metaStoreCF = StoreColumnFamily(versionstoreId + METATSTORE_CF_SUFFIX, storeSession)
-    CQLCassandraStore.createColumnFamily[Long, Boolean](metaStoreCF)
-    val store = new CQLCassandraStore[Long, Boolean](metaStoreCF)
-    new CassandraVersionMetaStore(store)
+    CQLCassandraStore.createColumnFamilyWithToken[Long, String, Long](metaStoreCF, Some(implicitly[CassandraPrimitive[Long]]))
+    val store = new CQLCassandraStore[Long, String](metaStoreCF)
+    new CassandraVersionMetaStore(store.getCASStore[Long]())
   }
+}
+
+/**
+ * Enumeration of possible version states:
+ * - Prepare: the version store is under preparation (i.e. the column family is being created)
+ * - Valid: the version store exists and can be used (i.e. the column family exists)
+ * - Invalid: the version store had existed but was invalidated and can not be used anymore (i.e. the column family has been dropped)
+ */
+object VersionState extends Enumeration {
+  type VersionState = Value
+  val Prepare, Valid, Invalid = Value
 }
 
 /**
@@ -55,14 +68,40 @@ class CassandraVersionMetaStore(val underlying: MetaStoreUnderlyingT) {
   def close(deadline: Time): Unit = underlying.close(deadline)
 
   /**
-   * mark version as valid
+   * prepare version store, succeeds if
+   *  - version did not exist before
+   *  AND
+   *  - no concurrent thread has changed the value.
+   *  In case of success, it is save to create a respective version store.
    */
-  def validate(version: Long): Unit = underlying.put(version, Some(true))
+  def prepareValidate(version: Long): Boolean =
+    Await.result(underlying.cas(None, (version, VersionState.Prepare.toString)))
 
   /**
-   * mark version as invalid
+   * release version store after preparation
    */
-  def invalidate(version: Long): Unit = underlying.put(version, Some(false))
+  def validate(version: Long): Boolean = Await.result(underlying.get(version)).map {
+    _ match {
+      case (v, t) if (v.equals(VersionState.Prepare.toString)) =>
+        Await.result(underlying.cas(Some(t), (version, VersionState.Valid.toString)))
+      case _ => false // can only validate from prepare state
+    }
+  }.getOrElse(false) // no state at all
+
+  /**
+   * mark version as invalid, succeeds if
+   *  - version was valid before
+   *  AND
+   *  - no concurrent thread has changed the value.
+   *  In case of success, it is save to drop a respective version store
+   */
+  def invalidate(version: Long): Boolean = Await.result(underlying.get(version)).map {
+    _ match {
+      case (v, t) if (v.equals(VersionState.Valid.toString)) =>
+        Await.result(underlying.cas(Some(t), (version, VersionState.Invalid.toString)))
+      case _ => false // can only invalidate from valid state
+    }
+  }.getOrElse(false) // no state at all
 
   /**
    * remove version from store
@@ -74,17 +113,17 @@ class CassandraVersionMetaStore(val underlying: MetaStoreUnderlyingT) {
   /*
      * read all version info
      */
-  private def readAll: Seq[(Long, Boolean)] = Await.result(Await.result(underlying getAll).toSeq)
+  private def readAll: Seq[(Long, String)] = Await.result(Await.result(underlying getAll).toSeq)
 
   /**
    * return all versions
    */
-  def allVersTuples: Seq[(Long, Boolean)] = readAll
+  def allVersTuples: Seq[(Long, String)] = readAll
 
   /**
    * return all versions marked as valid
    */
-  def vers: Seq[Long] = allVersTuples.filter { a => a._2 }.map { _._1 }
+  def vers: Seq[Long] = allVersTuples.filter { a => a._2.equals(VersionState.Valid.toString) }.map { _._1 }
 
   /**
    * count valid versions

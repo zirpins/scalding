@@ -17,16 +17,18 @@ limitations under the License.
 package com.twitter.scalding.commons.source.storehaus.cassandra
 
 import scala.collection.JavaConversions._
+import org.apache.hadoop.mapred.JobConf
 import org.specs.Specification
 import org.specs.mock.Mockito
+import com.twitter.concurrent.Spool
 import com.twitter.storehaus.IterableStore
+import com.twitter.storehaus.JMapStore
 import com.twitter.storehaus.Store
 import com.twitter.storehaus.cassandra.cql.CQLCassandraConfiguration._
-import com.twitter.storehaus.JMapStore
 import com.twitter.util.Future
-import com.twitter.concurrent.Spool
-import org.apache.hadoop.mapred.JobConf
-import com.datastax.driver.core.ConsistencyLevel
+import com.twitter.storehaus.cassandra.cql.CASStore
+import com.twitter.util.Closable
+import com.twitter.util.Time
 
 /**
  * Specification of the VersionedCassandraStoreInitializer
@@ -44,22 +46,37 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
   }
 
   /**
-   * MetaStoreUnderlyingT in-memory implementation
+   * MetaStoreUnderlyingT in-memory implementation with fake CASStore
    */
-  class MetaStoreImpl extends IterableJMapStore[Long, Boolean]()
+  class MetaStoreImpl() extends IterableStore[Long, String] with CASStore[Long, Long, String] with Closable {
+    val jitter = new IterableJMapStore[Long, String]()
+
+    override def getAll: Future[Spool[(Long, String)]] = jitter.getAll
+
+    override def get(k: Long)(implicit ev1: Equiv[Long]): Future[Option[(String, Long)]] =
+      jitter.get(k).map(_.map((_, 0L)))
+
+    override def cas(token: Option[Long], kv: (Long, String))(implicit ev1: Equiv[Long]): Future[Boolean] =
+      jitter.put((kv._1, Some(kv._2))).map(_ => true)
+
+    override def close(deadline: Time) = jitter.close(deadline)
+  }
 
   /**
    * Mock Initializer implementation
    */
+
   class TestInitilizer(metaStore: MetaStoreUnderlyingT) extends VersionedCassandraStoreInitializer[String, String](
     identifier = "test", versionsToKeep = 3, metaStoreUnderlying = Some(metaStore)) {
     val storeSessionMock = mock[StoreSession]
     val storeMock = mock[Store[String, String]]
+    val storeCFMock = mock[StoreColumnFamily]
 
     override def getStoreSession: StoreSession = storeSessionMock
     override def createColumnFamily(cf: StoreColumnFamily): Unit = { /* ignored */ }
     override def createReadableStore(cf: StoreColumnFamily): Store[String, String] = storeMock
     override def createWritableStore(cf: StoreColumnFamily): Store[String, String] = storeMock
+    override def getCf(ver: Long): StoreColumnFamily = storeCFMock
   }
 
   val jobConfMock = mock[JobConf]

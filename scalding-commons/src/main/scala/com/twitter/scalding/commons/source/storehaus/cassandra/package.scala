@@ -15,8 +15,9 @@ limitations under the License.
 */
 
 package com.twitter.scalding.commons.source.storehaus
-import com.twitter.storehaus.IterableStore
-import com.twitter.storehaus.Store
+import com.twitter.storehaus.{ Store, IterableStore, WritableStore }
+import com.twitter.storehaus.cassandra.cql.CASStore
+import com.twitter.util.Closable
 
 package object cassandra {
 
@@ -30,5 +31,5 @@ package object cassandra {
   val DEFAULT_VERSIONSTORE_IDENTIFIER = "single";
 
   // Minimum type of the internal versionedCassandraStore meta store
-  type MetaStoreUnderlyingT = Store[Long, Boolean] with IterableStore[Long, Boolean];
+  type MetaStoreUnderlyingT = IterableStore[Long, String] with CASStore[Long, Long, String] with Closable
 }

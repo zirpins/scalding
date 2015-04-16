@@ -27,6 +27,8 @@ import com.twitter.storehaus.IterableStore
 import com.twitter.storehaus.cassandra.cql.CQLCassandraConfiguration._
 import com.twitter.scalding.commons.source.storehaus.{ ManagedVersionedStore, ManagedCassandraStore }
 import com.twitter.util.Time
+import com.twitter.util.Try
+import java.util.concurrent.TimeUnit
 
 /**
  * Simple implementation of versioning for VersionedStoreCascadingInitializer
@@ -83,31 +85,41 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
   }
 
   /**
-   * remove version store
-   *
-   * NOTE: currently we do not delete any data but just mark the version as invalid)
-   */
-  private def dropStore(version: Long): Unit = {
-    logger.debug("Dropping outdated version store '{}'.", version);
-
-    // delete column family
-    getCf(version).dropAndDeleteColumnFamilyAndContainedData
-
-    // invalidate version
-    metaStore.invalidate(version);
-  }
-
-  /**
-   *  prepare new version store
+   *  prepare version store
    */
   override def prepareStore(version: Long): Boolean = {
-    logger.debug("Creating new version store '{}'.", version);
 
-    // create column family
-    createColumnFamily(getCf(version));
+    // drop oldest version if max number is reached
+    if (!((versionsToKeep - metaStore.numVers) > 0)) {
+      val oldver = metaStore.vers.sorted.head
+      if (metaStore.invalidate(oldver)) {
+        logger.info(s"Dropping old version store '$oldver'.")
+        getCf(oldver).dropAndDeleteColumnFamilyAndContainedData
+      } else {
+        logger.warn(s"Invalidation of version store '$version' revoked due to conflict.")
+      }
+    }
 
-    // register version
-    metaStore.validate(version);
+    val VALIDATE_WAIT = 3 * 1000 // 3 sec
+    val VALIDATE_TIMEOUT = 5 * 60 * 1000 // 5 min
+
+    // create new version store
+    if (metaStore.prepareValidate(version)) {
+      logger.info(s"Creating new version store '$version'.")
+      createColumnFamily(getCf(version))
+      metaStore.validate(version)
+    } else {
+      logger.info(s"Awaiting validation of version store '$version'.")
+      val startTime = System.currentTimeMillis()
+      while (!metaStore.hasVer(version)) {
+        TimeUnit.MILLISECONDS.sleep(VALIDATE_WAIT)
+        if (System.currentTimeMillis() - startTime > VALIDATE_TIMEOUT) {
+          logger.error(s"Unable to prepare version store '$version': validation timeout.")
+          return false
+        }
+      }
+    }
+
     true;
   }
 
@@ -147,9 +159,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
           logger.error(s"Tried to retrieve outdated non-existing version store '$version' for writing.");
           return None;
         }
-        // drop oldest version if max number is reached
-        if (!((versionsToKeep - metaStore.numVers) > 0)) dropStore(metaStore.vers.sorted.head);
-        // create new version store
+        // prepare version store
         if (prepareStore(version)) Some(getWritableStoreOnce(version)) else None;
       }
     }
