@@ -16,6 +16,7 @@ limitations under the License.
 
 package com.twitter.scalding.commons.source.storehaus.cassandra
 
+import scala.util.control.Breaks._
 import org.slf4j.LoggerFactory
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.io.Writable
@@ -89,33 +90,61 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
    */
   override def prepareStore(version: Long): Boolean = {
 
-    // drop oldest version if max number is reached
-    if (!((versionsToKeep - metaStore.numVers) > 0)) {
-      val oldver = metaStore.vers.sorted.head
-      if (metaStore.invalidate(oldver)) {
-        logger.info(s"Dropping old version store '$oldver'.")
-        getCf(oldver).dropAndDeleteColumnFamilyAndContainedData
-      } else {
-        logger.warn(s"Invalidation of version store '$version' revoked due to conflict.")
-      }
-    }
-
+    // timeouts for concurrent operations
     val VALIDATE_WAIT = 3 * 1000 // 3 sec
     val VALIDATE_TIMEOUT = 5 * 60 * 1000 // 5 min
 
-    // create new version store
+    // try to obtain a lock for preparing the version store
     if (metaStore.prepareValidate(version)) {
+
+      // we are the first/exclusive to prepare this version store
+
       logger.info(s"Creating new version store '$version'.")
       createColumnFamily(getCf(version))
       metaStore.validate(version)
-    } else {
+
+      val startTimeDrop = System.currentTimeMillis()
+
+      // this is a good time for cleaning up outdated versions
+
+      breakable {
+        // drop oldest versions if max number is reached. If something went wrong, 
+        // in the past, there might be even multiple outdated versions.
+        while (metaStore.numVers > versionsToKeep) {
+          val oldver = metaStore.vers.sorted.head
+          if (metaStore.invalidate(oldver)) {
+            logger.info(s"Dropping old version store '$oldver'.")
+            getCf(oldver).dropAndDeleteColumnFamilyAndContainedData
+          } else {
+            logger.warn(s"Invalidation of version store '$oldver' revoked due to conflict.")
+            if (System.currentTimeMillis() - startTimeDrop > VALIDATE_TIMEOUT) {
+              logger.warn("Unable to drop all outdated version stores due to timeout.")
+              break
+            } else {
+              // wait for competitor to finish drop activity
+              TimeUnit.MILLISECONDS.sleep(VALIDATE_WAIT)
+            }
+          } // outer if/else
+        } // while
+      } // breakable
+
+    } else { // we failed to obtain the lock
+
+      // the version store is being prepared by somebody else
+      // so we wait until this operation has been finished
+
       logger.info(s"Awaiting validation of version store '$version'.")
-      val startTime = System.currentTimeMillis()
-      while (!metaStore.hasVer(version)) {
-        TimeUnit.MILLISECONDS.sleep(VALIDATE_WAIT)
-        if (System.currentTimeMillis() - startTime > VALIDATE_TIMEOUT) {
-          logger.error(s"Unable to prepare version store '$version': validation timeout.")
-          return false
+
+      val startTimeCreate = System.currentTimeMillis()
+
+      breakable {
+        while (!metaStore.hasVer(version)) {
+          // Performs a Thread.sleep using this time unit.
+          TimeUnit.MILLISECONDS.sleep(VALIDATE_WAIT)
+          if (System.currentTimeMillis() - startTimeCreate > VALIDATE_TIMEOUT) {
+            logger.error(s"Unable to prepare version store '$version': validation timeout.")
+            break // no point to wait any longer - good luck
+          }
         }
       }
     }
