@@ -69,13 +69,29 @@ class CassandraVersionMetaStore(val underlying: MetaStoreUnderlyingT) {
 
   /**
    * prepare version store, succeeds if
-   *  - version did not exist before
+   *  - version did not exist
    *  AND
    *  - no concurrent thread has changed the value.
    *  In case of success, it is save to create a respective version store.
    */
-  def prepareValidate(version: Long): Boolean =
+
+  def prepareValidateNoRewrite(version: Long): Boolean =
     Await.result(underlying.cas(None, (version, VersionState.Prepare.toString)))
+
+  /**
+   * prepare version store, succeeds if
+   *  - version did not exist OR was invalid before
+   *  AND
+   *  - no concurrent thread has changed the value.
+   *  In case of success, it is save to create a respective version store.
+   */
+  def prepareValidate(version: Long): Boolean = Await.result(underlying.get(version)).map {
+    _ match {
+      case (v, t) if (v.equals(VersionState.Invalid.toString)) =>
+        Await.result(underlying.cas(Some(t), (version, VersionState.Prepare.toString)))
+      case _ => false // can only validate from invalid state...
+    }
+  }.getOrElse(Await.result(underlying.cas(None, (version, VersionState.Prepare.toString)))) // ...or no state at all
 
   /**
    * release version store after preparation
@@ -110,9 +126,9 @@ class CassandraVersionMetaStore(val underlying: MetaStoreUnderlyingT) {
    */
   def remove(version: Long): Unit = ???
 
-  /*
-     * read all version info
-     */
+  /**
+   * read all version info
+   */
   private def readAll: Seq[(Long, String)] = Await.result(Await.result(underlying getAll).toSeq)
 
   /**

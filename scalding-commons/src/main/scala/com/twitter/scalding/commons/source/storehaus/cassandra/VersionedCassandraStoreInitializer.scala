@@ -56,6 +56,10 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
     case None => CassandraVersionMetaStore(identifier, getStoreSession)
   }
 
+  // timeouts for concurrent operations
+  val VALIDATE_WAIT = 3 * 1000 // 3 sec
+  val VALIDATE_TIMEOUT = 5 * 60 * 1000 // 5 min
+
   /**
    * Shutdown the versioned store initializer
    */
@@ -90,10 +94,6 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
    */
   override def prepareStore(version: Long): Boolean = {
 
-    // timeouts for concurrent operations
-    val VALIDATE_WAIT = 3 * 1000 // 3 sec
-    val VALIDATE_TIMEOUT = 5 * 60 * 1000 // 5 min
-
     // try to obtain a lock for preparing the version store
     if (metaStore.prepareValidate(version)) {
 
@@ -103,30 +103,11 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
       createColumnFamily(getCf(version))
       metaStore.validate(version)
 
-      val startTimeDrop = System.currentTimeMillis()
+      // This is a good time for cleaning up outdated versions.
 
-      // this is a good time for cleaning up outdated versions
-
-      breakable {
-        // drop oldest versions if max number is reached. If something went wrong, 
-        // in the past, there might be even multiple outdated versions.
-        while (metaStore.numVers > versionsToKeep) {
-          val oldver = metaStore.vers.sorted.head
-          if (metaStore.invalidate(oldver)) {
-            logger.info(s"Dropping old version store '$oldver'.")
-            getCf(oldver).dropAndDeleteColumnFamilyAndContainedData
-          } else {
-            logger.warn(s"Invalidation of version store '$oldver' revoked due to conflict.")
-            if (System.currentTimeMillis() - startTimeDrop > VALIDATE_TIMEOUT) {
-              logger.warn("Unable to drop all outdated version stores due to timeout.")
-              break
-            } else {
-              // wait for competitor to finish drop activity
-              TimeUnit.MILLISECONDS.sleep(VALIDATE_WAIT)
-            }
-          } // outer if/else
-        } // while
-      } // breakable
+      // Drop oldest versions if max number is reached. If something went wrong, 
+      // in the past, there might be even multiple outdated versions.
+      while (metaStore.numVers > versionsToKeep) dropVersion(metaStore.vers.sorted.head)
 
     } else { // we failed to obtain the lock
 
@@ -151,6 +132,40 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
 
     true;
   }
+
+  /**
+   * Invalidate version and drop associated table. The function considers concurrent
+   * invalidation and tries to ensure that the version was really dropped. It will
+   * however give up after a timeout.
+   */
+  private def dropVersion(version: Long) = {
+    val startTimeDrop = System.currentTimeMillis()
+    if (metaStore.invalidate(version)) {
+      logger.info(s"Dropping old version store '$version'.")
+      getCf(version).dropAndDeleteColumnFamilyAndContainedData
+    } else {
+      breakable {
+        logger.warn(s"Invalidation of version store '$version' revoked due to conflict. " +
+          "Waiting for concurrent invalidation to succeed.")
+        while (metaStore.hasVer(version)) {
+          if (System.currentTimeMillis() - startTimeDrop > VALIDATE_TIMEOUT) {
+            logger.warn("Unable to drop all outdated version stores due to timeout.")
+            break // no point to wait any longer - good luck
+          } else {
+            // wait for competitor to finish drop activity
+            TimeUnit.MILLISECONDS.sleep(VALIDATE_WAIT)
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * clear all versions in store after upperBound (useful for re-writing versions).
+   * This function is not fully guarded against concurrent activities!
+   */
+  override def resetVersions(upperBound: Long): Unit =
+    versions.filter(_ > upperBound).foreach(dropVersion(_))
 
   /**
    * Retrieves some readable store for a version if existing, otherwise returns none.

@@ -39,6 +39,12 @@ trait ManagedVersionedStore {
   def lastVersionBefore(version: Long): Option[Long];
 
   /**
+   * clear all versions in store after upperBound
+   * (useful for re-writing versions)
+   */
+  def resetVersions(upperBound: Long): Unit;
+
+  /**
    * Shutdown the versioned store initializer
    */
   def close(): Unit;

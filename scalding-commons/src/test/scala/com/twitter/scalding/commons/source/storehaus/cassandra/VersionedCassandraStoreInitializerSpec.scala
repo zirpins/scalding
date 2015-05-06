@@ -111,6 +111,22 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
       init.versions.size must_== 3
     }
 
+    "Allow rewriting versions after reset" in {
+      val init = new TestInitilizer(new MetaStoreImpl())
+      init.getWritableStore(jobConfMock, 1L)
+      init.getWritableStore(jobConfMock, 2L)
+      init.getWritableStore(jobConfMock, 3L)
+      init.getWritableStore(jobConfMock, 4L)
+
+      // should be able to rewrite version 2 after reset
+      init.resetVersions(2L)
+      init.getWritableStore(jobConfMock, 2L).nonEmpty must_== true
+
+      // later versions should be gone
+      init.lastVersion() must_== 2
+      init.versions().size must_== 1
+    }
+
     "Disallow writing only for outdated versions" in {
       val init = new TestInitilizer(new MetaStoreImpl())
       init.getWritableStore(jobConfMock, 1L)
