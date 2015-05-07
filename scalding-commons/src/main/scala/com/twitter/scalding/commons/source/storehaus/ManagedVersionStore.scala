@@ -26,7 +26,7 @@ trait ManagedVersionedStore {
   /**
    * return latest version within the version store
    */
-  def lastVersion(): Long;
+  def lastVersion(): Option[Long];
 
   /**
    * return latest version within the version store

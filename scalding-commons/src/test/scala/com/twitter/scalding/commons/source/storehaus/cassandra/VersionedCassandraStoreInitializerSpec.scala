@@ -83,9 +83,9 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
 
   "A VersionedCassandraStoreInitializer" should {
 
-    "Return -1 as version of an empty store" in {
+    "Return None as version of an empty store" in {
       val init = new TestInitilizer(new MetaStoreImpl())
-      init.lastVersion() must_== -1L
+      init.lastVersion().isDefined must_== false
     }
 
     "Keep track of the latest version" in {
@@ -93,11 +93,11 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
 
       // version properly initialized
       init.getWritableStore(jobConfMock, 1L)
-      init.lastVersion() must_== 1L
+      init.lastVersion() must_== Some(1)
 
       // version update considered
       init.getWritableStore(jobConfMock, 2L)
-      init.lastVersion() must_== 2L
+      init.lastVersion() must_== Some(2)
     }
 
     "Restrict the maximum number of versions" in {
@@ -123,7 +123,7 @@ class VersionedCassandraStoreInitializerSpec extends Specification with Mockito 
       init.getWritableStore(jobConfMock, 2L).nonEmpty must_== true
 
       // later versions should be gone
-      init.lastVersion() must_== 2
+      init.lastVersion() must_== Some(2)
       init.versions().size must_== 1
     }
 

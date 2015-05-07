@@ -154,9 +154,9 @@ class CassandraVersionMetaStore(val underlying: MetaStoreUnderlyingT) {
   /**
    * return latest valid version
    */
-  def latestVer: Long = {
-    val v = vers;
-    if (v.isEmpty) -1 else v.sorted.last;
+  def latestVer: Option[Long] = vers match {
+    case vers if !vers.isEmpty => Some(vers.sorted.last)
+    case _ => None
   }
 
 }

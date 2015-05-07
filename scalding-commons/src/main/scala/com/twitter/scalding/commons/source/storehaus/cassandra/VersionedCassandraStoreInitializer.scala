@@ -68,7 +68,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
   /**
    * Meta store operation implementing {@link ManagedVersionedStore.lastVersion}
    */
-  override def lastVersion(): Long = { metaStore.latestVer }
+  override def lastVersion(): Option[Long] = { metaStore.latestVer }
 
   /**
    * Meta store operation implementing {@link ManagedVersionedStore.versions}
@@ -199,9 +199,11 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
       }
       case false => {
         // make sure new version is ahead
-        if (metaStore.latestVer > version) {
-          logger.error(s"Tried to retrieve outdated non-existing version store '$version' for writing.");
-          return None;
+        metaStore.latestVer.map { ver =>
+          if (ver > version) {
+            logger.error(s"Tried to retrieve outdated non-existing version store '$version' for writing.");
+            return None;
+          }
         }
         // prepare version store
         if (prepareStore(version)) Some(getWritableStoreOnce(version)) else None;
