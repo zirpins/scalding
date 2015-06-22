@@ -17,6 +17,7 @@ limitations under the License.
 package com.twitter.scalding.commons.source.storehaus
 
 import com.twitter.storehaus.Store
+import com.twitter.util.Time
 
 /**
  * Version store extension offering some management functionality
@@ -47,5 +48,5 @@ trait ManagedVersionedStore {
   /**
    * Shutdown the versioned store initializer
    */
-  def close(): Unit;
+  def close(timeout: Time): Unit;
 }

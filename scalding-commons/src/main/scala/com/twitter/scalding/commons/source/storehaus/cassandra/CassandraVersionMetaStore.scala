@@ -65,7 +65,7 @@ class CassandraVersionMetaStore(val underlying: MetaStoreUnderlyingT) {
   /**
    * close meta store
    */
-  def close(deadline: Time): Unit = underlying.close(deadline)
+  def close(timeout: Time): Unit = underlying.close(timeout)
 
   /**
    * prepare version store, succeeds if

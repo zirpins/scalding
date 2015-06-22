@@ -63,7 +63,7 @@ abstract class VersionedCassandraStoreInitializer[KeyT, ValT](
   /**
    * Shutdown the versioned store initializer
    */
-  override def close = { metaStore.close(Time.now) }
+  override def close(timeout: Time) = { metaStore.close(timeout) }
 
   /**
    * Meta store operation implementing {@link ManagedVersionedStore.lastVersion}
